@@ -35,7 +35,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int portionQuota;
     private Target? selectedTarget;
     private ImageEntry? selectedImage;
-    private string status = "Select a process to start scanning.", settingsStatus = "", selectedLabel = "No image selected";
+    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy selected";
     private Visibility settingsVisibility = Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? HideRequested;
@@ -71,6 +71,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string SelectedLabel { get => selectedLabel; private set { selectedLabel = value; Changed(); } }
     public string ImageCountLabel => $"{Images.Count} images";
     public string PauseLabel => paused ? "Resume" : "Pause";
+    public string CopyLabel { get => copyLabel; private set { copyLabel = value; Changed(); } }
     public bool ShowEmptyHint => selectedTarget is null && Images.Count == 0;
     public BitmapSource? SelectedPreview => selectedImage?.Image;
     public string SelectedRegionLabel => selectedImage is null ? "" : $"First found in: {selectedImage.RegionKind} region";
@@ -97,9 +98,11 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         CopyCommand = new RelayCommand(_ => CopySelected());
         SelectImageCommand = new RelayCommand(value =>
         {
+            var previous = selectedImage;
             if (selectedImage is not null) selectedImage.IsSelected = false;
             selectedImage = value as ImageEntry;
             if (selectedImage is not null) selectedImage.IsSelected = true;
+            if (!ReferenceEquals(previous, selectedImage)) CopyLabel = "Copy selected";
             SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
             Changed(nameof(SelectedPreview));
             Changed(nameof(SelectedRegionLabel));
@@ -139,12 +142,12 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!paused)
         {
             paused = true; stopReason = StopReason.Manual; stoppedForLimit = false;
-            Changed(nameof(PauseLabel)); Cancel(); Status = "Paused."; return;
+            Changed(nameof(PauseLabel)); Cancel(); Status = "Paused"; return;
         }
         long memoryAvailable = (long)settings.GalleryMiB * 1048576 - bytes;
         if (stopReason == StopReason.Memory && (memoryAvailable <= 0 || memoryAvailable < requiredMemoryBytes))
         {
-            Status = "Gallery memory limit reached. Increase the limit or clear images.";
+            Status = "Gallery memory limit reached. Increase the limit or clear images";
             return;
         }
         if (stopReason is StopReason.Quota or StopReason.End)
@@ -156,13 +159,13 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Changed(nameof(PauseLabel)); Restart(false);
     }
     private void Cancel() { generation++; cancellation?.Cancel(); cancellation = null; }
-    private void Clear() { Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; Changed(nameof(SelectedPreview)); Changed(nameof(SelectedRegionLabel)); Changed(nameof(SelectedFormatLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
+    private void Clear() { Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy selected"; Changed(nameof(SelectedPreview)); Changed(nameof(SelectedRegionLabel)); Changed(nameof(SelectedFormatLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
     private void Restart(bool clear)
     {
         Cancel();
         if (clear) { Clear(); if (stoppedForLimit) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); } }
         if (disposed || paused) return;
-        if (SelectedTarget is null) { Status = "Select a process to start scanning."; return; }
+        if (SelectedTarget is null) { Status = "Select a process to start scanning"; return; }
         var cts = new CancellationTokenSource(); cancellation = cts;
         _ = ScanLoop(SelectedTarget, generation, cts);
     }
@@ -231,18 +234,18 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     Images.Add(new ImageEntry(candidate.Image, candidate.Width, candidate.Height, candidate.RegionKind, candidate.Format)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint));
                 }
                 if (batch.LimitReached)
-                { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images."; return; }
+                { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images"; return; }
                 scanCursor = batch.IsEnd ? 0 : batch.NextAddress;
                 if (portionAdded >= portionQuota)
-                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next batch."; return; }
+                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next batch"; return; }
                 if (batch.IsEnd)
-                { paused = true; stoppedForLimit = false; stopReason = StopReason.End; Changed(nameof(PauseLabel)); Status = "Scan complete. Press Resume to search again."; return; }
+                { paused = true; stoppedForLimit = false; stopReason = StopReason.End; Changed(nameof(PauseLabel)); Status = "Scan complete. Press Resume to search again"; return; }
                 Status = $"{target.Name} · {Images.Count} images · {batch.BytesRead / 1048576} MiB scanned";
                 await WaitForDelayAsync(active.ScanIntervalMs, token);
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { if (!disposed && version == generation) { paused = true; stopReason = StopReason.Error; Changed(nameof(PauseLabel)); Status = $"Scan stopped (error 0x{ex.HResult:X8}). Check access or select another process."; } }
+        catch (Exception ex) { if (!disposed && version == generation) { paused = true; stopReason = StopReason.Error; Changed(nameof(PauseLabel)); Status = $"Scan stopped (error 0x{ex.HResult:X8}). Check access or select another process"; } }
         finally { if (ReferenceEquals(cancellation, cts)) cancellation = null; cts.Dispose(); }
     }
     // Observe cancellation by task status rather than awaiting a canceled task:
@@ -272,7 +275,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (process.StartTime.ToUniversalTime().Ticks != target.StartTicks) throw new InvalidOperationException("Target process changed.");
         return MemoryImageScanner.Scan(target.Handle, cursor, token, target.Pid, options);
     }
-    private void CopySelected() { if (selectedImage is null) { Status = "Select an image first."; return; } try { Clipboard.SetImage(selectedImage.Image); Status = "Image copied to clipboard."; } catch (Exception ex) { Status = $"Clipboard unavailable (error 0x{ex.HResult:X8})."; } }
+    private void CopySelected() { if (selectedImage is null) { Status = "Select an image first"; return; } try { Clipboard.SetImage(selectedImage.Image); CopyLabel = "Copied"; } catch (Exception ex) { Status = $"Clipboard unavailable (error 0x{ex.HResult:X8})"; } }
     private static BitmapSource ConvertImage(System.Drawing.Bitmap bitmap)
     {
         int stride = checked(bitmap.Width * 4);
@@ -292,11 +295,11 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private void ApplySettings()
     {
-        if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits."; return; }
+        if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits"; return; }
         var updated = new AppSettings { MaxReadMiB=read, MaxImageMiB=image, BatchSeconds=seconds, MaxCandidates=candidates, MaxSignatures=signatures, MaxDecodedMiB=decoded, MinDimension=min, MaxDimension=max, MaxImages=count, GalleryMiB=gallery, ScanIntervalMs=interval, HotkeyEnabled=HotkeyEnabled, IncludeMappedRegions=IncludeMappedRegions, IncludeImageRegions=IncludeImageRegions };
         if (updated.Validate() is string error) { SettingsStatus = error; return; }
-        try { store.Save(updated); settings = updated; SettingsStatus = "Settings saved. Changes apply to the next scan batch."; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
-        catch (Exception ex) { SettingsStatus = $"Unable to save settings (error 0x{ex.HResult:X8})."; }
+        try { store.Save(updated); settings = updated; SettingsStatus = "Settings saved. Changes apply to the next scan batch"; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        catch (Exception ex) { SettingsStatus = $"Unable to save settings (error 0x{ex.HResult:X8})"; }
     }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     public void Dispose() { disposed = true; Cancel(); Clear(); }
