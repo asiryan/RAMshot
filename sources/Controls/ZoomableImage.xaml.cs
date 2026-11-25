@@ -105,15 +105,15 @@ public partial class ZoomableImage : UserControl
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left) return;
-        // Handle the double click here: marking the button-down event handled can suppress the MouseDoubleClick event.
-        if (e.ClickCount == 2)
+        // Left double click still resets the view.
+        if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2)
         {
             ResetView();
             e.Handled = true;
             return;
         }
-        if (PreviewImage.Source is null || scale <= MinScale + 0.0001) return;
+        // Panning is bound to a held middle mouse button.
+        if (e.ChangedButton != MouseButton.Middle || PreviewImage.Source is null || scale <= MinScale + 0.0001) return;
         Focus();
         dragging = true;
         dragStart = e.GetPosition(Viewport);
@@ -133,16 +133,16 @@ public partial class ZoomableImage : UserControl
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!dragging) return;
+        if (!dragging || e.ChangedButton != MouseButton.Middle) return;
         dragging = false;
         ReleaseMouseCapture();
-        Cursor = Cursors.Hand;
+        Cursor = Cursors.Arrow;
         e.Handled = true;
     }
 
     private void OnLostMouseCapture(object sender, MouseEventArgs e)
     {
         dragging = false;
-        Cursor = Cursors.Hand;
+        Cursor = Cursors.Arrow;
     }
 }

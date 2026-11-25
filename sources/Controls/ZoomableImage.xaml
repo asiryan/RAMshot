@@ -4,13 +4,13 @@
              Background="Transparent"
              ClipToBounds="True"
              Focusable="True"
-             Cursor="Hand"
+             Cursor="Arrow"
              HorizontalContentAlignment="Stretch"
              VerticalContentAlignment="Stretch"
              SizeChanged="OnViewerSizeChanged"
              MouseWheel="OnMouseWheel"
-             MouseLeftButtonDown="OnMouseDown"
-             MouseLeftButtonUp="OnMouseUp"
+             MouseDown="OnMouseDown"
+             MouseUp="OnMouseUp"
              MouseMove="OnMouseMove"
              LostMouseCapture="OnLostMouseCapture">
  <Grid x:Name="Viewport" Background="Transparent" ClipToBounds="True">
