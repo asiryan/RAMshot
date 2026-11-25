@@ -12,6 +12,8 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32;
+using SkiaSharp;
 using RAMshot.Services;
 
 namespace RAMshot.ViewModels;
@@ -35,7 +37,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int portionQuota;
     private Target? selectedTarget;
     private ImageEntry? selectedImage;
-    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy selected";
+    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy", saveLabel = "Save";
     private Visibility settingsVisibility = Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? SettingsChanged;
@@ -45,6 +47,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand PauseCommand { get; }
     public ICommand ClearCommand { get; }
     public ICommand CopyCommand { get; }
+    public ICommand SaveCommand { get; }
     public ICommand SelectImageCommand { get; }
     public ICommand ApplySettingsCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
@@ -70,6 +73,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string ImageCountLabel => $"{Images.Count} images";
     public string PauseLabel => paused ? "Resume" : "Pause";
     public string CopyLabel { get => copyLabel; private set { copyLabel = value; Changed(); } }
+    public string SaveLabel { get => saveLabel; private set { saveLabel = value; Changed(); } }
     public bool ShowEmptyHint => selectedTarget is null && Images.Count == 0;
     public BitmapSource? SelectedPreview => selectedImage?.Image;
     public string SelectedRegionLabel => selectedImage is null ? "" : $"First found in: {selectedImage.RegionKind} region";
@@ -94,13 +98,14 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         PauseCommand = new RelayCommand(_ => TogglePause());
         ClearCommand = new RelayCommand(_ => { if (stoppedForLimit) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); } Clear(); if (!paused) Restart(false); });
         CopyCommand = new RelayCommand(_ => CopySelected());
+        SaveCommand = new RelayCommand(_ => SaveSelected());
         SelectImageCommand = new RelayCommand(value =>
         {
             var previous = selectedImage;
             if (selectedImage is not null) selectedImage.IsSelected = false;
             selectedImage = value as ImageEntry;
             if (selectedImage is not null) selectedImage.IsSelected = true;
-            if (!ReferenceEquals(previous, selectedImage)) CopyLabel = "Copy selected";
+            if (!ReferenceEquals(previous, selectedImage)) { CopyLabel = "Copy"; SaveLabel = "Save"; }
             if (selectedImage is not null) SettingsVisibility = Visibility.Collapsed;
             SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
             Changed(nameof(SelectedPreview));
@@ -157,7 +162,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Changed(nameof(PauseLabel)); Restart(false);
     }
     private void Cancel() { generation++; cancellation?.Cancel(); cancellation = null; }
-    private void Clear() { Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy selected"; Changed(nameof(SelectedPreview)); Changed(nameof(SelectedRegionLabel)); Changed(nameof(SelectedFormatLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
+    private void Clear() { Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; Changed(nameof(SelectedPreview)); Changed(nameof(SelectedRegionLabel)); Changed(nameof(SelectedFormatLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
     private void Restart(bool clear)
     {
         Cancel();
@@ -274,6 +279,58 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return MemoryImageScanner.Scan(target.Handle, cursor, token, target.Pid, options);
     }
     private void CopySelected() { if (selectedImage is null) { Status = "Select an image first"; return; } try { Clipboard.SetImage(selectedImage.Image); CopyLabel = "Copied"; } catch (Exception ex) { Status = $"Clipboard unavailable (error 0x{ex.HResult:X8})"; } }
+    private void SaveSelected()
+    {
+        if (selectedImage is null) { Status = "Select an image first"; return; }
+        var (name, extension) = selectedImage.Format switch
+        {
+            "JPEG" => ("JPEG image", "jpg"),
+            "GIF" => ("GIF image", "gif"),
+            "BMP" => ("BMP image", "bmp"),
+            "WebP" => ("WebP image", "webp"),
+            _ => ("PNG image", "png")
+        };
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save image",
+            Filter = $"{name} (*.{extension})|*.{extension}",
+            DefaultExt = extension,
+            FileName = $"image.{extension}",
+            AddExtension = true,
+            OverwritePrompt = true
+        };
+        if (dialog.ShowDialog() != true) return;
+        try { SaveImage(selectedImage, dialog.FileName); SaveLabel = "Saved"; }
+        catch (Exception ex) { Status = $"Unable to save image (error 0x{ex.HResult:X8})"; }
+    }
+    private static void SaveImage(ImageEntry image, string path)
+    {
+        if (image.Format == "WebP") { SaveWebp(image.Image, path); return; }
+        BitmapEncoder encoder = image.Format switch
+        {
+            "JPEG" => new JpegBitmapEncoder { QualityLevel = 90 },
+            "GIF" => new GifBitmapEncoder(),
+            "BMP" => new BmpBitmapEncoder(),
+            _ => new PngBitmapEncoder()
+        };
+        encoder.Frames.Add(BitmapFrame.Create(image.Image));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+    // WebP has no WPF encoder, so it is written through SkiaSharp like decoding is.
+    private static void SaveWebp(BitmapSource source, string path)
+    {
+        int width = source.PixelWidth, height = source.PixelHeight, stride = checked(width * 4);
+        var pixels = new byte[checked(stride * height)];
+        source.CopyPixels(pixels, stride, 0);
+        var info = new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Unpremul);
+        using var bitmap = new SKBitmap(info);
+        Marshal.Copy(pixels, 0, bitmap.GetPixels(), pixels.Length);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Webp, 90) ?? throw new InvalidOperationException("WebP encoding failed.");
+        using var stream = File.Create(path);
+        data.SaveTo(stream);
+    }
     private static BitmapSource ConvertImage(System.Drawing.Bitmap bitmap)
     {
         int stride = checked(bitmap.Width * 4);
