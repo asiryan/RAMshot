@@ -1,3 +1,4 @@
+using RAMshot.Controls;
 using RAMshot.ViewModels;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -34,6 +35,11 @@ public partial class MainWindow : Window
             return;
         }
         base.OnPreviewKeyDown(e);
+    }
+    protected override void OnDeactivated(EventArgs e)
+    {
+        Hint.HideAll();
+        base.OnDeactivated(e);
     }
     protected override void OnSourceInitialized(EventArgs e)
     {
