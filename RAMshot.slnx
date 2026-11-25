@@ -1,4 +1,9 @@
 <Solution>
-  <Project Path="sources/RAMshot.csproj" />
-  <Project Path="tests/ScannerRegression.csproj" />
+  <Folder Name="/sources/">
+    <Project Path="sources/RAMshot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ScannerRegression/ScannerRegression.csproj" />
+    <Project Path="tests/GalleryProbe/GalleryProbe.csproj" />
+  </Folder>
 </Solution>

@@ -37,11 +37,11 @@ The `RAMshot.slnx` solution file opens in Visual Studio 17.13+ and builds with .
 Scanner regression tests over controlled memory contents (block boundaries, resumption across portions, and JPEG with large metadata):
 
 ```powershell
-dotnet run --project .\tests\ScannerRegression.csproj -c Release
-dotnet run --project .\tests\ScannerRegression.csproj -c Release -- 8
+dotnet run --project .\tests\ScannerRegression\ScannerRegression.csproj -c Release
+dotnet run --project .\tests\ScannerRegression\ScannerRegression.csproj -c Release -- 8
 ```
 
-The application project and its sources are in `sources`; tests are in `tests`. The project is split into the WPF view, ViewModel, memory scanning service, and image saving. The application icon source is in `sources/Assets/RAMshot.svg`.
+The application project and its sources are in `sources`; tests are in `tests/ScannerRegression`, and `tests/GalleryProbe` is a helper process that keeps twelve generated PNGs in memory so the gallery and preview can be checked manually. The project is split into the WPF view, ViewModel, memory scanning service, and image saving. The application icon source is in `sources/Assets/RAMshot.svg`.
 
 ## License
 
