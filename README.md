@@ -42,3 +42,7 @@ dotnet run --project .\tests\ScannerRegression.csproj -c Release -- 8
 ```
 
 The application project and its sources are in `sources`; tests are in `tests`. The project is split into the WPF view, ViewModel, memory scanning service, and image saving. The application icon source is in `sources/Assets/RAMshot.svg`.
+
+## License
+
+MIT
