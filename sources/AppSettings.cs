@@ -17,6 +17,7 @@ internal sealed class AppSettings
     public int MaxDecodedMiB { get; set; } = 100;
     public int ScanIntervalMs { get; set; } = 1000;
     public bool HotkeyEnabled { get; set; } = true;
+    public bool ShowTooltips { get; set; } = true;
     public bool IncludeMappedRegions { get; set; }
     public bool IncludeImageRegions { get; set; }
 

@@ -1,3 +1,4 @@
+using RAMshot.Controls;
 using RAMshot.ViewModels;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -24,6 +25,22 @@ public partial class MainWindow : Window
         Show(); WindowState = WindowState.Normal; Activate();
     }
     public void Shutdown() { shutdown = true; viewModel.Dispose(); Close(); }
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control &&
+            Keyboard.FocusedElement is not System.Windows.Controls.TextBox)
+        {
+            viewModel.SelectAllImages();
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewKeyDown(e);
+    }
+    protected override void OnDeactivated(EventArgs e)
+    {
+        Hint.HideAll();
+        base.OnDeactivated(e);
+    }
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
@@ -72,12 +89,14 @@ public partial class MainWindow : Window
     }
     protected override void OnClosing(CancelEventArgs e)
     {
+        Hint.HideAll();
         if (!shutdown) { e.Cancel = true; Hide(); }
         base.OnClosing(e);
     }
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);
+        if (WindowState == WindowState.Minimized) Hint.HideAll();
         if (MaximizeGlyph is not null)
             MaximizeGlyph.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }

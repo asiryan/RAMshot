@@ -1,0 +1,9 @@
+<UserControl x:Class="RAMshot.Controls.HintControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             IsHitTestVisible="False"
+             Focusable="False">
+ <Border Background="#E6142126" BorderBrush="#465B58" BorderThickness="1" CornerRadius="4" Padding="8,4">
+  <TextBlock x:Name="HintText" Foreground="#D3E7E1" FontSize="11" TextWrapping="Wrap" MaxWidth="360"/>
+ </Border>
+</UserControl>

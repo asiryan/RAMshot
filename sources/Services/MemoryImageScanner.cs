@@ -24,7 +24,9 @@ internal static class MemoryImageScanner
         internal string Format { get; }
         internal string Hash { get; }
         internal string RegionKind { get; }
-        internal Candidate(Bitmap image, string format, string hash, string regionKind = "Unknown") { Image = image; Format = format; Hash = hash; RegionKind = regionKind; }
+        // Original encoded bytes are kept for every format so saves are byte-for-byte exact.
+        internal byte[] EncodedBytes { get; }
+        internal Candidate(Bitmap image, string format, string hash, string regionKind, byte[] encodedBytes) { Image = image; Format = format; Hash = hash; RegionKind = regionKind; EncodedBytes = encodedBytes; }
         public void Dispose() => Image.Dispose();
     }
 
@@ -204,7 +206,9 @@ internal static class MemoryImageScanner
                                                 _ => "Unknown"
                                             };
                                             string format = kind switch { ImageKind.Png => "PNG", ImageKind.Jpeg => "JPEG", ImageKind.Gif => "GIF", ImageKind.Bmp => "BMP", _ => "WebP" };
-                                            result.Candidates.Add(new Candidate(bitmap, format, hash, regionKind));
+                                            // Keep the complete encoded file (all frames, metadata and trailing data of the format) for an exact save.
+                                            byte[] encodedBytes = data.AsSpan(0, imageLength).ToArray();
+                                            result.Candidates.Add(new Candidate(bitmap, format, hash, regionKind, encodedBytes));
                                             bitmap = null; // Candidate owns the image now.
                                             result.DecodedBytes += decodedBytes;
                                             imageHashes.Add(hash);
