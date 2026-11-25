@@ -66,7 +66,7 @@
     <Viewbox Width="44" Height="44" Margin="0,0,14,0"><Canvas Width="128" Height="128"><Path Data="M37,12 L37,24 M55,12 L55,24 M73,12 L73,24 M91,12 L91,24 M37,104 L37,116 M55,104 L55,116 M73,104 L73,116 M91,104 L91,116" Stroke="#5BE5C5" StrokeThickness="7" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/><Rectangle Canvas.Left="13" Canvas.Top="24" Width="102" Height="80" RadiusX="11" RadiusY="11" Stroke="#E9F8F5" StrokeThickness="7"/><Path Data="M31,80 L50,62 L62,72 L72,63 L97,80" Stroke="#5BE5C5" StrokeThickness="6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/><Ellipse Canvas.Left="75" Canvas.Top="47" Width="8" Height="8" Fill="#5BE5C5"/></Canvas></Viewbox>
     <StackPanel><TextBlock FontSize="25" FontWeight="Bold"><Run Text="RAM"/><Run Text="shot" Foreground="#5BE5C5"/></TextBlock><TextBlock Text="IMAGE DISCOVERY IN MEMORY" Style="{StaticResource Caption}"/></StackPanel>
    </StackPanel>
-   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Width="112" Height="36" Content="Settings" Command="{Binding ToggleSettingsCommand}"/></StackPanel>
+   <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><Button Width="112" Height="36" Content="Settings" Command="{Binding ToggleSettingsCommand}" Margin="0"/></StackPanel>
   </Grid>
   <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*" MinWidth="480"/><ColumnDefinition Width="0.5*" MinWidth="340" MaxWidth="560"/></Grid.ColumnDefinitions>
    <Border Background="{StaticResource Panel}" BorderBrush="#293A3C" BorderThickness="1" CornerRadius="14" Padding="18" Margin="0,0,16,0">
