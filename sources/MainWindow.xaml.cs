@@ -1,7 +1,9 @@
 using System;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using RAMshot.ViewModels;
 
@@ -59,6 +61,17 @@ public partial class MainWindow : Window
     private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     private void Maximize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    // Settings fields accept digits only, whether typed or pasted.
+    private void NumberOnly_PreviewTextInput(object sender, TextCompositionEventArgs e) => e.Handled = !e.Text.All(char.IsDigit);
+    private void NumberOnly_Pasting(object sender, DataObjectPastingEventArgs e)
+    {
+        if (!e.DataObject.GetDataPresent(typeof(string)) || !((string)e.DataObject.GetData(typeof(string))!).All(char.IsDigit))
+            e.CancelCommand();
+    }
+    private void SettingsInputChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel) viewModel.ResetApplyLabel();
+    }
     protected override void OnClosing(CancelEventArgs e)
     {
         if (!shutdown) { e.Cancel = true; Hide(); }

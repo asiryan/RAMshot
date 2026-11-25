@@ -32,7 +32,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int portionQuota;
     private Target? selectedTarget;
     private ImageEntry? selectedImage;
-    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy", saveLabel = "Save";
+    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy", saveLabel = "Save", applyLabel = "Apply settings";
     private Visibility settingsVisibility = Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? SettingsChanged;
@@ -69,6 +69,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string PauseLabel => paused ? "Resume" : "Pause";
     public string CopyLabel { get => copyLabel; private set { copyLabel = value; Changed(); } }
     public string SaveLabel { get => saveLabel; private set { saveLabel = value; Changed(); } }
+    public string ApplyLabel { get => applyLabel; private set { applyLabel = value; Changed(); } }
     public bool ShowEmptyHint => selectedTarget is null && Images.Count == 0;
     public BitmapSource? SelectedPreview => selectedImage?.Image;
     public string SelectedRegionLabel => selectedImage is null ? "" : $"First found in: {selectedImage.RegionKind} region";
@@ -101,7 +102,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             selectedImage = value as ImageEntry;
             if (selectedImage is not null) selectedImage.IsSelected = true;
             if (!ReferenceEquals(previous, selectedImage)) { CopyLabel = "Copy"; SaveLabel = "Save"; }
-            if (selectedImage is not null) SettingsVisibility = Visibility.Collapsed;
+            if (selectedImage is not null) { SettingsVisibility = Visibility.Collapsed; ApplyLabel = "Apply settings"; }
             SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
             Changed(nameof(SelectedPreview));
             Changed(nameof(SelectedRegionLabel));
@@ -359,10 +360,12 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits"; return; }
         var updated = new AppSettings { MaxReadMiB=read, MaxImageMiB=image, BatchSeconds=seconds, MaxCandidates=candidates, MaxSignatures=signatures, MaxDecodedMiB=decoded, MinDimension=min, MaxDimension=max, MaxImages=count, GalleryMiB=gallery, ScanIntervalMs=interval, HotkeyEnabled=HotkeyEnabled, IncludeMappedRegions=IncludeMappedRegions, IncludeImageRegions=IncludeImageRegions };
         if (updated.Validate() is string error) { SettingsStatus = error; return; }
-        try { store.Save(updated); settings = updated; SettingsStatus = "Settings saved. Changes apply to the next scan batch"; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        try { store.Save(updated); settings = updated; ApplyLabel = "Applied"; SettingsStatus = "Settings saved. Changes apply to the next scan batch"; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
         catch (Exception ex) { SettingsStatus = $"Unable to save settings (error 0x{ex.HResult:X8})"; }
     }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    // Any edit in the settings form invalidates the "Applied" confirmation on the Apply button.
+    internal void ResetApplyLabel() { if (applyLabel != "Apply settings") ApplyLabel = "Apply settings"; }
     public void Dispose() { disposed = true; Cancel(); Clear(); }
     private sealed record ConvertedImage(BitmapSource Image, string Hash, int Width, int Height, long Bytes, string RegionKind, string Format);
     private sealed record ScanBatch(List<ConvertedImage> Images, long BytesRead, long NextAddress, bool IsEnd, bool LimitReached, long RequiredBytes);
