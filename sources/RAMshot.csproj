@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>RAMshot</AssemblyName>
+    <RootNamespace>RAMshot</RootNamespace>
+    <ApplicationIcon>Assets\RAMshot.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets\RAMshot.ico" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">RAMshot open image icon</title>
+  <desc id="desc">A memory chip with teal contacts and a single unframed image.</desc>
+  <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M37 12v12M55 12v12M73 12v12M91 12v12M37 104v12M55 104v12M73 104v12M91 104v12" stroke="#5BE5C5"/>
+    <rect x="13" y="24" width="102" height="80" rx="11" stroke="#E9F8F5"/>
+  </g>
+  <path d="M31 80l19-18 12 10 10-9 25 17" fill="none" stroke="#5BE5C5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="79" cy="51" r="4" fill="#5BE5C5"/>
+</svg>

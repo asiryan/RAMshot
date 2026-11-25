@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\sources\Services\MemoryImageScanner.cs" Link="MemoryImageScanner.cs" />
+    <Compile Include="..\sources\Services\ScanOptions.cs" Link="ScanOptions.cs" />
+    <Compile Include="..\sources\Services\WebpDecoder.cs" Link="WebpDecoder.cs" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+  </ItemGroup>
+</Project>

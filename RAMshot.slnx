@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="sources/RAMshot.csproj" />
+  <Project Path="tests/ScannerRegression.csproj" />
+</Solution>
