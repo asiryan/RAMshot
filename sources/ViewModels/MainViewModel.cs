@@ -334,7 +334,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         using var bitmap = new SKBitmap(info);
         Marshal.Copy(pixels, 0, bitmap.GetPixels(), pixels.Length);
         using var image = SKImage.FromBitmap(bitmap);
-        using var data = image.Encode(SKEncodedImageFormat.Webp, 90) ?? throw new InvalidOperationException("WebP encoding failed.");
+        using var data = image.Encode(SKEncodedImageFormat.Webp, 100) ?? throw new InvalidOperationException("WebP encoding failed.");
         using var stream = File.Create(path);
         data.SaveTo(stream);
     }

@@ -21,7 +21,7 @@ try
     using var webpBitmap = new SKBitmap(180, 160);
     webpBitmap.Erase(SKColors.Orange);
     using var webpImage = SKImage.FromBitmap(webpBitmap);
-    using var webpData = webpImage.Encode(SKEncodedImageFormat.Webp, 90);
+    using var webpData = webpImage.Encode(SKEncodedImageFormat.Webp, 100);
     byte[][] images = { ImageBytes(Color.Red, ImageFormat.Png), ImageBytes(Color.Blue, ImageFormat.Jpeg), ImageBytes(Color.Lime, ImageFormat.Gif), ImageBytes(Color.Purple, ImageFormat.Bmp), webpData.ToArray() };
     int[] offsets = { chunkSize == 8 ? 5 : 4093, 8190, 12284, 16383, 200699 };
     for (int i = 0; i < images.Length; i++) Marshal.Copy(images[i], 0, IntPtr.Add(allocation, offsets[i]), images[i].Length);
