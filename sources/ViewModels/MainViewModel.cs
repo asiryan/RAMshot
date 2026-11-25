@@ -234,7 +234,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     hashes.Add(candidate.Hash); bytes += candidate.Bytes;
                     portionAdded++;
-                    Images.Add(new ImageEntry(candidate.Image, candidate.Width, candidate.Height, candidate.RegionKind, candidate.Format)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint));
+                    Images.Add(new ImageEntry(candidate.Image, candidate.Width, candidate.Height, candidate.RegionKind, candidate.Format, candidate.Hash)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint));
                 }
                 if (batch.LimitReached)
                 { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images"; return; }
@@ -295,13 +295,20 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Title = "Save image",
             Filter = $"{name} (*.{extension})|*.{extension}",
             DefaultExt = extension,
-            FileName = $"image.{extension}",
+            FileName = SaveFileName(selectedImage, extension),
             AddExtension = true,
             OverwritePrompt = true
         };
         if (dialog.ShowDialog() != true) return;
         try { SaveImage(selectedImage, dialog.FileName); SaveLabel = "Saved"; }
         catch (Exception ex) { Status = $"Unable to save image (error 0x{ex.HResult:X8})"; }
+    }
+    // The name is the content hash, so identical bytes always produce the same file name.
+    private static string SaveFileName(ImageEntry image, string extension)
+    {
+        string hash = image.Hash.Length >= 16 ? image.Hash[..16] : image.Hash;
+        if (hash.Length == 0) hash = "unknown";
+        return $"{hash.ToLowerInvariant()}.{extension}";
     }
     private static void SaveImage(ImageEntry image, string path)
     {
@@ -370,13 +377,15 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         private bool isSelected;
         public ImageEntry(BitmapSource image, int width, int height) : this(image, width, height, "Unknown") { }
         public ImageEntry(BitmapSource image, int width, int height, string regionKind) : this(image, width, height, regionKind, "Unknown format") { }
-        public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format)
-        { Image = image; Width = width; Height = height; RegionKind = regionKind; Format = format; }
+        public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format) : this(image, width, height, regionKind, format, "") { }
+        public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format, string hash)
+        { Image = image; Width = width; Height = height; RegionKind = regionKind; Format = format; Hash = hash; }
         public BitmapSource Image { get; }
         public int Width { get; }
         public int Height { get; }
         public string RegionKind { get; }
         public string Format { get; }
+        public string Hash { get; }
         public string Label => $"{Width} × {Height}";
         public string CardLabel => $"{Label}  ·  {RegionKind}";
         public bool IsSelected
