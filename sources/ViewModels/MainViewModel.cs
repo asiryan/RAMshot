@@ -1,20 +1,15 @@
-using System;
-using System.Collections.Generic;
+using Microsoft.Win32;
+using RAMshot.Services;
+using SkiaSharp;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using Microsoft.Win32;
-using SkiaSharp;
-using RAMshot.Services;
 
 namespace RAMshot.ViewModels;
 
