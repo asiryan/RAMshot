@@ -88,10 +88,11 @@ public static class Hint
         {
             this.element = element;
             timer.Tick += OnTimerTick;
-            element.MouseEnter += OnMouseEnter;
-            element.MouseLeave += OnMouseLeave;
-            element.MouseWheel += OnMouseWheel;
-            element.MouseDown += OnMouseDown;
+            // Also observe events that the target control marks as handled (for example wheel zoom).
+            element.AddHandler(Mouse.MouseEnterEvent, new MouseEventHandler(OnMouseEnter), true);
+            element.AddHandler(Mouse.MouseLeaveEvent, new MouseEventHandler(OnMouseLeave), true);
+            element.AddHandler(UIElement.MouseWheelEvent, new MouseWheelEventHandler(OnMouseWheel), true);
+            element.AddHandler(UIElement.MouseDownEvent, new MouseButtonEventHandler(OnMouseDown), true);
             element.Unloaded += OnUnloaded;
         }
 
