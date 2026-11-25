@@ -1,42 +1,42 @@
 # RAMshot
 
-Windows-приложение на C# и WPF для поиска PNG, JPEG, GIF, BMP и WebP в доступной памяти выбранного процесса. Найденные изображения появляются в галерее и остаются в памяти; выбранное изображение можно скопировать в буфер обмена или сохранить на диск в том же формате. Для анимированных GIF и WebP отображается и сохраняется первый кадр.
+A Windows application built with C# and WPF that searches for PNG, JPEG, GIF, BMP, and WebP images in the readable memory of the selected process. Found images appear in the gallery and stay in memory; the selected image can be copied to the clipboard or saved to disk in the same format. Animated GIF and WebP files show and save their first frame.
 
-## Использование
+## Usage
 
-1. Откройте RAMshot. Он попробует выбрать последнее активное окно и сразу начнёт поиск; проверьте выбранный процесс и при необходимости смените его в списке.
-2. Нажмите на изображение, чтобы увидеть его в области предпросмотра. **Copy** копирует его в буфер обмена, **Save** сохраняет на диск в том же формате (PNG, JPEG, GIF, BMP или WebP) через стандартный диалог сохранения. Имя файла по умолчанию — `<первые 16 символов SHA-256>.<расширение>`; его можно изменить в диалоге. JPEG перекодируется с качеством 100, для GIF и WebP записывается первый кадр, поэтому файл может отличаться от исходных байт и терять метаданные.
-3. Поиск останавливается после заполнения текущей порции или завершения прохода по памяти. **Resume** начинает следующую порцию, сохраняя найденные изображения; после завершения прохода он запускает повторный проход и добавляет только новые изображения — уже найденные не дублируются (сравнение по SHA-256). **Clear** очищает галерею и историю хэшей, поэтому те же изображения могут появиться снова. **Pause**, **Clear** и **Refresh** управляют поиском и галереей.
-4. Кнопка **Settings** открывает лимиты поиска и галереи. **Apply settings** сохраняет изменения без перезапуска поиска; новые параметры используются со следующего пакета, а новый размер порции — при следующей порции. Поля принимают только цифры. После успешного сохранения кнопка показывает **Applied** и возвращается к **Apply settings** при изменении настроек, переключении панели или выборе изображения.
+1. Launch RAMshot. It tries to select the most recently active window and starts scanning immediately; verify the selected process and change it in the list if needed.
+2. Click an image to preview it. **Copy** copies it to the clipboard; **Save** writes it to disk in the same format (PNG, JPEG, GIF, BMP, or WebP) through the standard save dialog. The default file name is `<first 16 SHA-256 hex characters>.<extension>`; you can change it in the dialog. JPEG is re-encoded at quality 100, and GIF/WebP save only the first frame, so the file may differ from the original bytes and lose metadata.
+3. Scanning stops when the current portion is filled or a pass over memory completes. **Resume** starts the next portion while keeping found images; after a completed pass it starts a new pass and adds only new images — already found ones are not duplicated (deduplicated by SHA-256). **Clear** empties the gallery and the hash history, so the same images may appear again. **Pause**, **Clear**, and **Refresh** control scanning and the gallery.
+4. The **Settings** button opens scan and gallery limits. **Apply settings** saves changes without restarting the scan; new parameters apply from the next batch, and a new portion size applies from the next portion. Fields accept digits only. After a successful save the button shows **Applied** and returns to **Apply settings** when settings change, the panel is toggled, or an image is selected.
 
-Окно не имеет системной шапки: кнопки свернуть, развернуть и закрыть находятся в правом верхнем углу. При закрытии окно сворачивается в трей. Полностью завершить программу можно через **Exit** в меню значка. Повторный запуск при уже работающем приложении показывает сообщение; открыть окно можно из трея или сочетанием **Ctrl + Shift + F12** (его можно отключить в настройках). F12 зарезервирована Windows для отладки, поэтому возможны конфликты с другими программами.
+The window has no system title bar: minimize, maximize/restore, and close buttons are in the top-right corner. Closing the window minimizes it to the tray. To exit completely, use **Exit** in the tray icon menu. Launching the app again while it is already running shows a message; open the window from the tray or with **Ctrl + Shift + F12** (the hotkey can be disabled in Settings). F12 is reserved by Windows for debugging, so conflicts with other applications are possible.
 
-Приложение запускается от имени администратора: Windows показывает запрос UAC при каждом старте. Это нужно, чтобы читать память процессов с более высокими правами; при отказе в повышении прав приложение не запустится.
+The application runs as administrator: Windows shows a UAC prompt on every start. This is needed to read memory of processes with higher privileges; if elevation is declined, the application will not start.
 
-Значения по умолчанию: до 512 МиБ на пакет, до 16 МиБ на кодированное изображение, 2 секунды на пакет, размеры изображения от 128 до 4096 пикселей, 80 новых изображений в порции, до 200 МиБ в галерее, пауза между пакетами 1 секунда. Области `Mapped` и `Image module` по умолчанию не сканируются, их можно включить в настройках. Лимит памяти действует независимо от размера порции. Настройки хранятся в `%LocalAppData%\RAMshot\settings.json`; если файл повреждён или содержит недопустимые значения, используются значения по умолчанию.
+Defaults: up to 512 MiB per batch, up to 16 MiB per encoded image, 2 seconds per batch, image dimensions from 128 to 4096 pixels, 80 new images per portion, up to 200 MiB in the gallery, and a 1 second pause between batches. `Mapped` and `Image module` regions are not scanned by default; they can be enabled in Settings. The memory limit applies regardless of the portion size. Settings are stored in `%LocalAppData%\RAMshot\settings.json`; if the file is corrupted or contains invalid values, the defaults are used.
 
-## Ограничения
+## Limitations
 
-RAMshot читает только доступную память выбранного процесса. Результаты могут быть ресурсами или устаревшими изображениями, а не содержимым экрана. Изображения в памяти других процессов, на GPU, в недоступной памяти, в неподдерживаемых форматах или разделённые между областями могут не обнаружиться. Windows может отказать в доступе; приложение запускается с правами администратора (см. выше), но не внедряется в целевой процесс и не обходит защиту процессов.
+RAMshot reads only the readable memory of the selected process. Results may be resources or stale images rather than what is on screen. Images in other processes' memory, on the GPU, in inaccessible memory, in unsupported formats, or split across regions may not be found. Windows may deny access; the application runs with administrator rights (see above) but does not inject into the target process or bypass process protection.
 
-По умолчанию приложение ищет изображения только в приватных (`Private`) областях памяти, а отображённые в память файлы (`Mapped`) и образы модулей (`Image module`) пропускает; в настройках эти области можно включить. Метка `Private`, `Mapped` или `Image module` показывает тип области, в которой конкретная копия изображения найдена впервые. Она не устанавливает происхождение картинки: в процессе могут находиться ресурсы загруженных библиотек, включая системные значки. Фильтры размеров и лимиты в настройках действуют для всех форматов.
+By default the application searches only private (`Private`) memory regions and skips file-mapped views (`Mapped`) and module images (`Image module`); these regions can be enabled in Settings. The `Private`, `Mapped`, or `Image module` label shows the region type where a particular copy of the image was first found. It does not establish the image's origin: the process may contain resources from loaded libraries, including system icons. Size filters and limits in Settings apply to all formats.
 
-## Сборка
+## Build
 
-Нужны 64-битная Windows 10/11 и .NET 8 SDK с Windows Desktop Runtime; приложение сканирует память из 64-битного процесса:
+Requires 64-bit Windows 10/11 and the .NET 8 SDK with Windows Desktop Runtime; the application scans memory from a 64-bit process:
 
 ```powershell
 dotnet build .\sources\RAMshot.csproj -c Release
 dotnet run --project .\sources\RAMshot.csproj -c Release
 ```
 
-Файл решения `RAMshot.slnx` открывается в Visual Studio 17.13+ и собирается .NET SDK 9.0.200+; сами проекты (`sources`, `tests`) собираются и на .NET 8 SDK.
+The `RAMshot.slnx` solution file opens in Visual Studio 17.13+ and builds with .NET SDK 9.0.200+; the projects themselves (`sources`, `tests`) also build with the .NET 8 SDK.
 
-Проверка поиска по контролируемому содержимому памяти (включая границы блоков, продолжение по порциям и JPEG с крупными метаданными):
+Scanner regression tests over controlled memory contents (block boundaries, resumption across portions, and JPEG with large metadata):
 
 ```powershell
 dotnet run --project .\tests\ScannerRegression.csproj -c Release
 dotnet run --project .\tests\ScannerRegression.csproj -c Release -- 8
 ```
 
-Проект приложения и его исходники находятся в `sources`; тесты — в `tests`. Проект разделён на WPF-представление, ViewModel, сервис сканирования и сохранение изображений. Исходник значка приложения находится в `sources/Assets/RAMshot.svg`.
+The application project and its sources are in `sources`; tests are in `tests`. The project is split into the WPF view, ViewModel, memory scanning service, and image saving. The application icon source is in `sources/Assets/RAMshot.svg`.
