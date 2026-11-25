@@ -41,6 +41,12 @@ dotnet run --project .\tests\ScannerRegression\ScannerRegression.csproj -c Relea
 dotnet run --project .\tests\ScannerRegression\ScannerRegression.csproj -c Release -- 8
 ```
 
+To check the gallery and preview manually, start `GalleryProbe` (it keeps twelve generated PNGs in memory) and then launch RAMshot while the probe window is in the foreground:
+
+```powershell
+dotnet run --project .\tests\GalleryProbe\GalleryProbe.csproj -c Release
+```
+
 The application project and its sources are in `sources`; tests are in `tests/ScannerRegression`, and `tests/GalleryProbe` is a helper process that keeps twelve generated PNGs in memory so the gallery and preview can be checked manually. The project is split into the WPF view, ViewModel, memory scanning service, and image saving. The application icon source is in `sources/Assets/RAMshot.svg`.
 
 ## License
