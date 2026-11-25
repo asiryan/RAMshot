@@ -195,9 +195,13 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         try { preview = await Task.Run(() => DecodePreview(image)); }
         catch (Exception) { }
         // The selection, the settings panel or the gallery may have changed while decoding.
-        if (version != previewVersion || !ReferenceEquals(selectedImage, image) || preview is null) return;
+        if (version != previewVersion || !ReferenceEquals(selectedImage, image)) return;
+        if (preview is null || preview.Frames.Count == 0)
+        {
+            SelectedFormatLabel = image.Format is "GIF" or "WebP" ? $"{image.Format} · preview unavailable" : image.Format;
+            return;
+        }
         previewIsFull = preview.Frames.Count > 0;
-        if (preview.Frames.Count == 0) { SelectedFormatLabel = FormatLabel(image, false, false, 0); return; }
         SelectedPreview = preview.Frames[0];
         if (preview.IsAnimated && preview.Frames.Count > 1)
         {
@@ -398,14 +402,21 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (process.StartTime.ToUniversalTime().Ticks != target.StartTicks) throw new InvalidOperationException("Target process changed.");
         return MemoryImageScanner.Scan(target.Handle, cursor, token, target.Pid, options);
     }
-    private void CopySelected()
+    private async void CopySelected()
     {
         if (selectedImage is null) { Status = "Select an image first"; return; }
+        ImageEntry entry = selectedImage;
+        BitmapSource? preview = SelectedPreview;
+        BitmapSource? image = previewIsFull ? preview : null;
+        if (image is null)
+        {
+            // Full-resolution decoding can take a while; keep the UI responsive.
+            try { image = await Task.Run(() => DecodeSelectedImage(entry)); }
+            catch { Status = "Unable to decode the selected image"; return; }
+            if (!ReferenceEquals(selectedImage, entry)) return;
+        }
         try
         {
-            // An already decoded preview is full resolution; otherwise decode it on demand.
-            BitmapSource? preview = SelectedPreview;
-            BitmapSource image = previewIsFull && preview is not null ? preview : DecodeSelectedImage(selectedImage);
             Clipboard.SetImage(image);
             CopyLabel = "Copied";
         }
