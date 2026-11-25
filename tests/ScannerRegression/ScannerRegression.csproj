@@ -10,6 +10,7 @@
     <Compile Include="..\..\sources\Services\MemoryImageScanner.cs" Link="MemoryImageScanner.cs" />
     <Compile Include="..\..\sources\Services\ScanOptions.cs" Link="ScanOptions.cs" />
     <Compile Include="..\..\sources\Services\WebpDecoder.cs" Link="WebpDecoder.cs" />
+    <Compile Include="..\..\sources\Services\GifAnimationDecoder.cs" Link="GifAnimationDecoder.cs" />
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 </Project>

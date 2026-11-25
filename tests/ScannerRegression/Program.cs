@@ -41,6 +41,8 @@ try
             if (expected.Contains(candidate.Hash))
             {
                 if (candidate.RegionKind != "Private") throw new Exception("Incorrect memory region kind");
+                if (candidate.Format == "GIF" && (candidate.EncodedBytes is null || !candidate.EncodedBytes.AsSpan().SequenceEqual(images[2])))
+                    throw new Exception("Static GIF bytes were not preserved");
                 found.Add(candidate.Hash);
             }
         if (result.IsEnd || result.NextAddress <= current) break;
@@ -59,12 +61,32 @@ try
         if (candidate.Format != format || candidate.Hash != Convert.ToHexString(SHA256.HashData(encoded)) ||
             !checkPixel(candidate.Image.GetPixel(x, y)))
             throw new Exception($"{format} animated first frame or transparency mismatch");
-        Console.WriteLine($"PASS animated {format} first frame and transparency");
+        if (format == "GIF" && (candidate.EncodedBytes is null || !candidate.EncodedBytes.AsSpan().SequenceEqual(encoded)))
+            throw new Exception("Animated GIF bytes were not preserved");
+        Console.WriteLine(format == "GIF"
+            ? "PASS animated GIF first frame, transparency and original bytes"
+            : $"PASS animated {format} first frame and transparency");
     }
     CheckAnimation(AnimatedGif(), "GIF", 0, 0, color => color.A == 0);
     // Synthetic two-frame 256x256 WebP; the first frame has alpha 128.
     var animatedWebp = Convert.FromBase64String("UklGRoYAAABXRUJQVlA4WAoAAAASAAAA/wAA/wAAQU5JTQYAAAAAAAAAAABBTk1GKgAAAAAAAAAAAP8AAP8AAGQAAAJWUDhMEQAAAC//wD8QB1CojhS5gIGI6H8AAEFOTUYoAAAAAAAAAAAA/wAA/wAAZAAAAlZQOEwPAAAAL//APwAHENH//gciov8BAA==");
     CheckAnimation(animatedWebp, "WebP", 128, 128, color => color.A == 128 && Math.Abs(color.R - 35) < 10);
+
+    // The preview decoder must return every frame with its delay and composited transparency.
+    var gifAnimation = GifAnimationDecoder.Decode(AnimatedGif(), 64L * 1024 * 1024);
+    try
+    {
+        if (!gifAnimation.IsAnimated || gifAnimation.Frames.Count != 2 || gifAnimation.Delays.Length != 2)
+            throw new Exception("Animated GIF frames were not decoded");
+        if (gifAnimation.Delays.Any(delay => delay != 100))
+            throw new Exception("GIF frame delays were not read");
+        if (gifAnimation.Frames[0].GetPixel(0, 0).A != 0)
+            throw new Exception("GIF frame transparency was lost while decoding");
+    }
+    finally { foreach (var frame in gifAnimation.Frames) frame.Dispose(); }
+    var staticGif = GifAnimationDecoder.Decode(ImageBytes(Color.Lime, ImageFormat.Gif), 64L * 1024 * 1024);
+    if (staticGif.IsAnimated || staticGif.Frames.Count != 0) throw new Exception("A static GIF was treated as an animation");
+    Console.WriteLine("PASS animated GIF frame decoding, delays and transparency");
 
     // A JPEG whose APP2 metadata pushes the SOF past the 64 KiB header must still be found.
     byte[] largeMetadataJpeg = JpegWithLargeMetadata();

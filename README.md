@@ -1,13 +1,13 @@
 # RAMshot
 
-A Windows application built with C# and WPF that searches for PNG, JPEG, GIF, BMP, and WebP images in the readable memory of the selected process. Found images appear in the gallery and stay in memory; the selected image can be copied to the clipboard or saved to disk in the same format. Animated GIF and WebP files show and save their first frame.
+A Windows application built with C# and WPF that searches for PNG, JPEG, GIF, BMP, and WebP images in the readable memory of the selected process. Found images appear in the gallery and stay in memory; the selected image can be copied to the clipboard or saved to disk in the same format. Animated GIFs play in the preview and are saved unchanged; animated WebP files show and save their first frame.
 
 ![RAMshot](docs/qa2-preview.png)
 
 ## Usage
 
 1. Launch RAMshot. It tries to select the most recently active window and starts scanning immediately; verify the selected process and change it in the list if needed.
-2. Click an image to preview it. **Copy** copies it to the clipboard; **Save** writes it to disk in the same format (PNG, JPEG, GIF, BMP, or WebP) through the standard save dialog. The default file name is `<first 16 SHA-256 hex characters>.<extension>`; you can change it in the dialog. JPEG and WebP are re-encoded at quality 100, and GIF/WebP save only the first frame, so the file may differ from the original bytes and lose metadata.
+2. Click an image to preview it. **Copy** copies it to the clipboard (GIF is copied as its first frame, because the Windows clipboard does not carry animations); **Save** writes it to disk in the same format (PNG, JPEG, GIF, BMP, or WebP) through the standard save dialog. The default file name is `<first 16 SHA-256 hex characters>.<extension>`; you can change it in the dialog. JPEG and WebP are re-encoded at quality 100, and WebP saves only the first frame, so the file may differ from the original bytes and lose metadata. GIF is written byte-for-byte as found, so animation, palette, and metadata are preserved; gallery cards show the first frame while the preview plays the animation (individual frame delays are honored, and animations that exceed the preview limits fall back to the first frame).
 3. Scanning stops when the current portion is filled or a pass over memory completes. **Resume** starts the next portion while keeping found images; after a completed pass it starts a new pass and adds only new images — already found ones are not duplicated (deduplicated by SHA-256). **Clear** empties the gallery and the hash history, so the same images may appear again. **Pause**, **Clear**, and **Refresh** control scanning and the gallery.
 4. The **Settings** button opens scan and gallery limits. **Apply settings** saves changes without restarting the scan; new parameters apply from the next batch, and a new portion size applies from the next portion. Fields accept digits only. After a successful save the button shows **Applied** and returns to **Apply settings** when settings change, the panel is toggled, or an image is selected.
 
@@ -42,7 +42,7 @@ The output is one file, `sources\bin\Release\net8.0-windows\win-x64\publish\RAMs
 
 The `RAMshot.slnx` solution file opens in Visual Studio 17.13+ and builds with .NET SDK 9.0.200+; the projects themselves (`sources`, `tests`) also build with the .NET 8 SDK.
 
-Scanner regression tests over controlled memory contents (block boundaries, resumption across portions, and JPEG with large metadata):
+Scanner regression tests over controlled memory contents (block boundaries, resumption across portions, animated GIF original bytes, and JPEG with large metadata):
 
 ```powershell
 dotnet run --project .\tests\ScannerRegression\ScannerRegression.csproj -c Release

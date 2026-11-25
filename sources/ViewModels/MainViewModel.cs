@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace RAMshot.ViewModels;
 
@@ -32,7 +33,14 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private int portionQuota;
     private Target? selectedTarget;
     private ImageEntry? selectedImage;
-    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy", saveLabel = "Save", applyLabel = "Apply settings";
+    private BitmapSource? selectedPreview;
+    private DispatcherTimer? animationTimer;
+    private List<BitmapSource> animationFrames = new();
+    private int[] animationDelays = Array.Empty<int>();
+    private int animationFrame;
+    private int previewVersion;
+    private bool suppressPreviewRestart;
+    private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy", saveLabel = "Save", applyLabel = "Apply settings", selectedFormatLabel = "";
     private Visibility settingsVisibility = Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
     public event EventHandler? SettingsChanged;
@@ -71,11 +79,24 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string SaveLabel { get => saveLabel; private set { saveLabel = value; Changed(); } }
     public string ApplyLabel { get => applyLabel; private set { applyLabel = value; Changed(); } }
     public bool ShowEmptyHint => selectedTarget is null && Images.Count == 0;
-    public BitmapSource? SelectedPreview => selectedImage?.Image;
+    public BitmapSource? SelectedPreview { get => selectedPreview; private set { if (ReferenceEquals(selectedPreview, value)) return; selectedPreview = value; Changed(); } }
     public string SelectedRegionLabel => selectedImage is null ? "" : $"First found in: {selectedImage.RegionKind} region";
-    public string SelectedFormatLabel => selectedImage is null ? "" : selectedImage.Format is "GIF" or "WebP" ? $"{selectedImage.Format} · First frame shown" : selectedImage.Format;
+    public string SelectedFormatLabel { get => selectedFormatLabel; private set { if (selectedFormatLabel == value) return; selectedFormatLabel = value; Changed(); } }
     public Visibility PreviewVisibility => settingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-    public Visibility SettingsVisibility { get => settingsVisibility; set { settingsVisibility = value; Changed(); Changed(nameof(PreviewVisibility)); } }
+    public Visibility SettingsVisibility
+    {
+        get => settingsVisibility;
+        set
+        {
+            if (settingsVisibility == value) return;
+            settingsVisibility = value;
+            Changed();
+            Changed(nameof(PreviewVisibility));
+            // Stop decoding and timer work while the preview is hidden behind the settings panel; resume when it returns.
+            if (value == Visibility.Visible) StopAnimation();
+            else if (!suppressPreviewRestart && selectedImage is not null) BeginPreview(selectedImage);
+        }
+    }
     public Target? SelectedTarget { get => selectedTarget; set { if (ReferenceEquals(selectedTarget, value)) return; selectedTarget = value; Changed(); Changed(nameof(ShowEmptyHint)); if (!refreshing) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); Restart(true); } } }
 
     public MainViewModel(IntPtr initialWindow) : this(initialWindow, new SettingsStore(), ScanTarget) { }
@@ -95,19 +116,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ClearCommand = new RelayCommand(_ => { if (stoppedForLimit) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); } Clear(); if (!paused) Restart(false); });
         CopyCommand = new RelayCommand(_ => CopySelected());
         SaveCommand = new RelayCommand(_ => SaveSelected());
-        SelectImageCommand = new RelayCommand(value =>
-        {
-            var previous = selectedImage;
-            if (selectedImage is not null) selectedImage.IsSelected = false;
-            selectedImage = value as ImageEntry;
-            if (selectedImage is not null) selectedImage.IsSelected = true;
-            if (!ReferenceEquals(previous, selectedImage)) { CopyLabel = "Copy"; SaveLabel = "Save"; }
-            if (selectedImage is not null) { SettingsVisibility = Visibility.Collapsed; ApplyLabel = "Apply settings"; }
-            SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
-            Changed(nameof(SelectedPreview));
-            Changed(nameof(SelectedRegionLabel));
-            Changed(nameof(SelectedFormatLabel));
-        });
+        SelectImageCommand = new RelayCommand(SelectImage);
         ApplySettingsCommand = new RelayCommand(_ => ApplySettings());
         ToggleSettingsCommand = new RelayCommand(_ => { SettingsVisibility = SettingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; ResetApplyLabel(); });
         RefreshTargets(initialWindow);
@@ -136,6 +145,86 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!same) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); Restart(true); }
         else if (previous!.Handle != SelectedTarget!.Handle && !paused) Restart(false);
     }
+    private void SelectImage(object? value)
+    {
+        var previous = selectedImage;
+        if (selectedImage is not null) selectedImage.IsSelected = false;
+        selectedImage = value as ImageEntry;
+        if (selectedImage is not null) selectedImage.IsSelected = true;
+        if (!ReferenceEquals(previous, selectedImage)) { CopyLabel = "Copy"; SaveLabel = "Save"; }
+        if (selectedImage is not null)
+        {
+            // Collapsing the settings panel must not restart the preview for the previously selected image.
+            suppressPreviewRestart = true;
+            SettingsVisibility = Visibility.Collapsed;
+            suppressPreviewRestart = false;
+            ApplyLabel = "Apply settings";
+        }
+        SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
+        BeginPreview(selectedImage);
+        Changed(nameof(SelectedRegionLabel));
+    }
+    // Shows the first frame immediately and starts the animation once the frames are decoded in the background.
+    private void BeginPreview(ImageEntry? image)
+    {
+        StopAnimation();
+        SelectedPreview = image?.Image;
+        SelectedFormatLabel = image is null ? "" : image.Format is "GIF" or "WebP" ? $"{image.Format} · First frame shown" : image.Format;
+        if (image is { Format: "GIF", EncodedBytes: { Length: > 0 } bytes })
+        {
+            int version = previewVersion;
+            _ = LoadAnimationAsync(image, bytes, version);
+        }
+    }
+    private void StopAnimation()
+    {
+        previewVersion++;
+        animationTimer?.Stop();
+        animationTimer = null;
+        animationFrames.Clear();
+        animationDelays = Array.Empty<int>();
+        animationFrame = 0;
+    }
+    private async Task LoadAnimationAsync(ImageEntry image, byte[] bytes, int version)
+    {
+        GifPreview? preview = null;
+        // A broken animation must never affect the gallery: the already shown first frame stays.
+        try
+        {
+            preview = await Task.Run<GifPreview>(() =>
+            {
+                var animation = GifAnimationDecoder.Decode(bytes, MaxPreviewAnimationBytes);
+                try
+                {
+                    return new GifPreview(animation.IsAnimated, animation.Frames.Select(ConvertImage).ToList(), animation.Delays);
+                }
+                finally
+                {
+                    foreach (var frame in animation.Frames) frame.Dispose();
+                }
+            });
+        }
+        catch (Exception) { }
+        // The selection, the settings panel or the gallery may have changed while decoding.
+        if (version != previewVersion || !ReferenceEquals(selectedImage, image) || preview is null) return;
+        if (!preview.IsAnimated) { SelectedFormatLabel = "GIF · static"; return; }
+        if (preview.Frames.Count == 0) { SelectedFormatLabel = "GIF · animation (preview limited)"; return; }
+        animationFrames = preview.Frames;
+        animationDelays = preview.Delays;
+        animationFrame = 0;
+        SelectedPreview = animationFrames[0];
+        SelectedFormatLabel = $"GIF · animation, {animationFrames.Count} frames";
+        animationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(animationDelays[0]) };
+        animationTimer.Tick += AdvanceAnimation;
+        animationTimer.Start();
+    }
+    private void AdvanceAnimation(object? sender, EventArgs e)
+    {
+        if (animationFrames.Count == 0) { StopAnimation(); return; }
+        animationFrame = (animationFrame + 1) % animationFrames.Count;
+        SelectedPreview = animationFrames[animationFrame];
+        if (animationTimer is not null) animationTimer.Interval = TimeSpan.FromMilliseconds(animationDelays[animationFrame]);
+    }
     private void TogglePause()
     {
         if (!paused)
@@ -158,7 +247,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Changed(nameof(PauseLabel)); Restart(false);
     }
     private void Cancel() { generation++; cancellation?.Cancel(); cancellation = null; }
-    private void Clear() { Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; Changed(nameof(SelectedPreview)); Changed(nameof(SelectedRegionLabel)); Changed(nameof(SelectedFormatLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
+    private void Clear() { StopAnimation(); Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; SelectedPreview = null; SelectedFormatLabel = ""; Changed(nameof(SelectedRegionLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
     private void Restart(bool clear)
     {
         Cancel();
@@ -206,7 +295,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                         {
                             if (token.IsCancellationRequested) return null;
                             if (!knownHashes.Add(candidate.Hash)) continue;
-                            long size = (long)candidate.Image.Width * candidate.Image.Height * 4;
+                            // The gallery holds the decoded first frame plus the original GIF bytes needed for a lossless save.
+                            long size = (long)candidate.Image.Width * candidate.Image.Height * 4 + (candidate.EncodedBytes?.Length ?? 0);
                             // A single image that is larger than the entire gallery can never fit.
                             if (size > galleryLimit) continue;
                             if (remainingSlots <= 0 || size > remainingBytes)
@@ -217,7 +307,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                             }
                             // Freeze the WPF image on the worker before handing it to the UI.
                             BitmapSource image = ConvertImage(candidate.Image);
-                            converted.Add(new ConvertedImage(image, candidate.Hash, candidate.Image.Width, candidate.Image.Height, size, candidate.RegionKind, candidate.Format));
+                            converted.Add(new ConvertedImage(image, candidate.Hash, candidate.Image.Width, candidate.Image.Height, size, candidate.RegionKind, candidate.Format, candidate.EncodedBytes));
                             remainingSlots--;
                             remainingBytes -= size;
                         }
@@ -230,7 +320,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 {
                     hashes.Add(candidate.Hash); bytes += candidate.Bytes;
                     portionAdded++;
-                    Images.Add(new ImageEntry(candidate.Image, candidate.Width, candidate.Height, candidate.RegionKind, candidate.Format, candidate.Hash)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint));
+                    Images.Add(new ImageEntry(candidate.Image, candidate.Width, candidate.Height, candidate.RegionKind, candidate.Format, candidate.Hash, candidate.EncodedBytes)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint));
                 }
                 if (batch.LimitReached)
                 { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images"; return; }
@@ -312,6 +402,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private static void SaveImage(ImageEntry image, string path)
     {
+        // GIF is written exactly as found: re-encoding keeps only one frame and loses delays, palettes and metadata.
+        if (image.Format == "GIF" && image.EncodedBytes is { Length: > 0 } bytes) { File.WriteAllBytes(path, bytes); return; }
         if (image.Format == "WebP") { SaveWebp(image.Image, path); return; }
         BitmapEncoder encoder = image.Format switch
         {
@@ -355,6 +447,10 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         image.Freeze();
         return image;
     }
+    // Animation preview frames are capped so a pathological GIF cannot exhaust memory; the first frame is still shown.
+    private const long MaxPreviewAnimationBytes = 64L * 1024 * 1024;
+    private sealed record GifPreview(bool IsAnimated, List<BitmapSource> Frames, int[] Delays);
+
     private void ApplySettings()
     {
         if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits"; return; }
@@ -367,7 +463,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     // Any edit in the settings form invalidates the "Applied" confirmation on the Apply button.
     internal void ResetApplyLabel() { if (applyLabel != "Apply settings") ApplyLabel = "Apply settings"; }
     public void Dispose() { disposed = true; Cancel(); Clear(); }
-    private sealed record ConvertedImage(BitmapSource Image, string Hash, int Width, int Height, long Bytes, string RegionKind, string Format);
+    private sealed record ConvertedImage(BitmapSource Image, string Hash, int Width, int Height, long Bytes, string RegionKind, string Format, byte[]? EncodedBytes);
     private sealed record ScanBatch(List<ConvertedImage> Images, long BytesRead, long NextAddress, bool IsEnd, bool LimitReached, long RequiredBytes);
     public sealed record Target(IntPtr Handle, uint Pid, string Name, long StartTicks)
     {
@@ -380,14 +476,16 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         public ImageEntry(BitmapSource image, int width, int height) : this(image, width, height, "Unknown") { }
         public ImageEntry(BitmapSource image, int width, int height, string regionKind) : this(image, width, height, regionKind, "Unknown format") { }
         public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format) : this(image, width, height, regionKind, format, "") { }
-        public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format, string hash)
-        { Image = image; Width = width; Height = height; RegionKind = regionKind; Format = format; Hash = hash; }
+        public ImageEntry(BitmapSource image, int width, int height, string regionKind, string format, string hash, byte[]? encodedBytes = null)
+        { Image = image; Width = width; Height = height; RegionKind = regionKind; Format = format; Hash = hash; EncodedBytes = encodedBytes; }
         public BitmapSource Image { get; }
         public int Width { get; }
         public int Height { get; }
         public string RegionKind { get; }
         public string Format { get; }
         public string Hash { get; }
+        // GIF only: the complete encoded file, used for byte-exact saving and animation preview.
+        public byte[]? EncodedBytes { get; }
         public string Label => $"{Width} × {Height}";
         public string CardLabel => $"{Label}  ·  {RegionKind}";
         public bool IsSelected

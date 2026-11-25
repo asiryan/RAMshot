@@ -24,7 +24,9 @@ internal static class MemoryImageScanner
         internal string Format { get; }
         internal string Hash { get; }
         internal string RegionKind { get; }
-        internal Candidate(Bitmap image, string format, string hash, string regionKind = "Unknown") { Image = image; Format = format; Hash = hash; RegionKind = regionKind; }
+        // Original encoded bytes are kept only for GIF so animation can be saved unchanged.
+        internal byte[]? EncodedBytes { get; }
+        internal Candidate(Bitmap image, string format, string hash, string regionKind = "Unknown", byte[]? encodedBytes = null) { Image = image; Format = format; Hash = hash; RegionKind = regionKind; EncodedBytes = encodedBytes; }
         public void Dispose() => Image.Dispose();
     }
 
@@ -204,7 +206,9 @@ internal static class MemoryImageScanner
                                                 _ => "Unknown"
                                             };
                                             string format = kind switch { ImageKind.Png => "PNG", ImageKind.Jpeg => "JPEG", ImageKind.Gif => "GIF", ImageKind.Bmp => "BMP", _ => "WebP" };
-                                            result.Candidates.Add(new Candidate(bitmap, format, hash, regionKind));
+                                            // Keep the complete encoded GIF (all frames, palettes and delays) so it can be saved byte-for-byte.
+                                            byte[]? encodedBytes = kind == ImageKind.Gif ? data.AsSpan(0, imageLength).ToArray() : null;
+                                            result.Candidates.Add(new Candidate(bitmap, format, hash, regionKind, encodedBytes));
                                             bitmap = null; // Candidate owns the image now.
                                             result.DecodedBytes += decodedBytes;
                                             imageHashes.Add(hash);
