@@ -533,6 +533,10 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             if (dialog.ShowDialog() != true) return;
             SaveImage(image, dialog.FileName);
             SaveLabel = "Saved";
+            string folder = Path.GetDirectoryName(dialog.FileName) ?? "";
+            Status = string.IsNullOrEmpty(folder)
+                ? $"Saved {Path.GetFileName(dialog.FileName)}"
+                : $"Saved {Path.GetFileName(dialog.FileName)} to {folder}";
         }
         catch (Exception ex) { Status = $"Unable to save image (error 0x{ex.HResult:X8})"; }
     }
