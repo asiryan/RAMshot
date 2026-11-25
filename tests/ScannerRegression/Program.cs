@@ -26,6 +26,7 @@ try
     int[] offsets = { chunkSize == 8 ? 5 : 4093, 8190, 12284, 16383, 200699 };
     for (int i = 0; i < images.Length; i++) Marshal.Copy(images[i], 0, IntPtr.Add(allocation, offsets[i]), images[i].Length);
     var expected = images.Select(x => Convert.ToHexString(SHA256.HashData(x))).ToHashSet();
+    var sourceByHash = images.ToDictionary(x => Convert.ToHexString(SHA256.HashData(x)), x => x);
     var found = new HashSet<string>();
     using var control = new Control();
     var hwnd = control.Handle;
@@ -41,8 +42,8 @@ try
             if (expected.Contains(candidate.Hash))
             {
                 if (candidate.RegionKind != "Private") throw new Exception("Incorrect memory region kind");
-                if (candidate.Format == "GIF" && (candidate.EncodedBytes is null || !candidate.EncodedBytes.AsSpan().SequenceEqual(images[2])))
-                    throw new Exception("Static GIF bytes were not preserved");
+                if (!candidate.EncodedBytes.AsSpan().SequenceEqual(sourceByHash[candidate.Hash]))
+                    throw new Exception($"{candidate.Format} original bytes were not preserved");
                 found.Add(candidate.Hash);
             }
         if (result.IsEnd || result.NextAddress <= current) break;
@@ -61,8 +62,8 @@ try
         if (candidate.Format != format || candidate.Hash != Convert.ToHexString(SHA256.HashData(encoded)) ||
             !checkPixel(candidate.Image.GetPixel(x, y)))
             throw new Exception($"{format} animated first frame or transparency mismatch");
-        if (format == "GIF" && (candidate.EncodedBytes is null || !candidate.EncodedBytes.AsSpan().SequenceEqual(encoded)))
-            throw new Exception("Animated GIF bytes were not preserved");
+        if (!candidate.EncodedBytes.AsSpan().SequenceEqual(encoded))
+            throw new Exception($"{format} original bytes were not preserved");
         Console.WriteLine(format == "GIF"
             ? "PASS animated GIF first frame, transparency and original bytes"
             : $"PASS animated {format} first frame and transparency");
@@ -87,6 +88,32 @@ try
     var staticGif = GifAnimationDecoder.Decode(ImageBytes(Color.Lime, ImageFormat.Gif), 64L * 1024 * 1024);
     if (staticGif.IsAnimated || staticGif.Frames.Count != 0) throw new Exception("A static GIF was treated as an animation");
     Console.WriteLine("PASS animated GIF frame decoding, delays and transparency");
+
+    // WebP animation uses SkiaSharp; check frames, delays, transparency and the single-frame path used by Copy.
+    var webpAnimation = WebpAnimationDecoder.Decode(animatedWebp, 64L * 1024 * 1024);
+    try
+    {
+        if (!webpAnimation.IsAnimated || webpAnimation.Limited || webpAnimation.Frames.Count != 2 || webpAnimation.Delays.Length != 2)
+            throw new Exception("Animated WebP frames were not decoded");
+        if (webpAnimation.Delays.Any(delay => delay <= 0))
+            throw new Exception("WebP frame delays were not read");
+        if (webpAnimation.Frames[0].GetPixel(128, 128).A != 128)
+            throw new Exception("WebP frame transparency was lost while decoding");
+    }
+    finally { foreach (var frame in webpAnimation.Frames) frame.Dispose(); }
+    var staticWebp = WebpAnimationDecoder.Decode(webpData.ToArray(), 64L * 1024 * 1024);
+    try
+    {
+        if (staticWebp.IsAnimated || staticWebp.Frames.Count != 1 || staticWebp.Frames[0].Width != 180 || staticWebp.Frames[0].Height != 160)
+            throw new Exception("A static WebP was not decoded as a still image");
+    }
+    finally { foreach (var frame in staticWebp.Frames) frame.Dispose(); }
+    using (var firstWebpFrame = WebpAnimationDecoder.DecodeFirstFrame(animatedWebp))
+    {
+        if (firstWebpFrame is null || firstWebpFrame.Width != 256 || firstWebpFrame.Height != 256)
+            throw new Exception("The WebP first frame was not decoded");
+    }
+    Console.WriteLine("PASS animated and static WebP frame decoding, delays and transparency");
 
     // A JPEG whose APP2 metadata pushes the SOF past the 64 KiB header must still be found.
     byte[] largeMetadataJpeg = JpegWithLargeMetadata();

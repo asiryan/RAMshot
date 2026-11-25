@@ -34,6 +34,8 @@ internal static class Program
             byte[] animatedGif = Convert.FromBase64String(AnimatedGifBase64);
             if (FrameCount(animatedGif) < 2) throw new InvalidOperationException("The GIF fixture is not animated");
             Images.Add(animatedGif);
+            // A two-frame 300x300 WebP checks the WebP animation preview and the byte-exact WebP save.
+            Images.Add(Convert.FromBase64String(AnimatedWebpBase64));
             form.Text = $"RAMshot GalleryProbe ({Images.Count})";
             form.Activate();
             form.TopMost = true;
@@ -65,4 +67,7 @@ internal static class Program
         KeWUVFZp5ZVYZqnlllx26eWXYIYp5phklmnmmWimqeaabLbp5ptwxinnnHTWaeedeOap55589unnn4AGKuighBZq6KGIJqrooow26uijkEYq6aSUVmrppZhm
         qummnHbq6aeghirqqKSWauqpRAYEADs=
         """;
+
+    // Two 300x300 WebP frames: pink (200 ms) then blue (300 ms), looping forever.
+    private const string AnimatedWebpBase64 = "UklGRogAAABXRUJQVlA4WAoAAAACAAAAKwEAKwEAQU5JTQYAAAAAAAAAAABBTk1GKgAAAAAAAAAAACsBACsBAMgAAAJWUDhMEQAAAC8rwUoAB1Ctrlew/4GI6H8AAEFOTUYqAAAAAAAAAAAAKwEAKwEALAEAAFZQOEwRAAAALyvBSgAHUMHylLv/gYjofwAA";
 }
