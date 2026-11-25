@@ -65,7 +65,7 @@
   <Style x:Key="ActionButton" TargetType="Button" BasedOn="{StaticResource ToolbarButton}"><Style.Triggers><DataTrigger Binding="{Binding SelectedPreview}" Value="{x:Null}"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style>
  </Window.Resources>
  <Grid>
-  <Grid Margin="28,14,28,28">
+  <Grid Margin="28,14,28,14">
   <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <Grid Margin="0,0,0,12">
    <StackPanel Orientation="Horizontal">
@@ -120,7 +120,7 @@
     </Grid>
    </Border>
   </Grid>
-  <Grid Grid.Row="2" Margin="0,16,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Status}" Foreground="#8FA6A1" TextTrimming="CharacterEllipsis"/><TextBlock Grid.Column="1" Text="{Binding HotkeyHelp}" Foreground="#718783" FontSize="11"/></Grid>
+  <Grid Grid.Row="2" Margin="0,13,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Status}" Foreground="#8FA6A1" TextTrimming="CharacterEllipsis" FontSize="12" VerticalAlignment="Center"/><TextBlock Grid.Column="1" Text="{Binding HotkeyHelp}" Foreground="#718783" FontSize="12" VerticalAlignment="Center"/></Grid>
   </Grid>
   <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
    <Button x:Name="MinimizeButton" Style="{StaticResource CaptionButton}" Click="Minimize_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize" WindowChrome.IsHitTestVisibleInChrome="True"><TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10"/></Button>
