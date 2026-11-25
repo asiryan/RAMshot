@@ -12,6 +12,8 @@ namespace RAMshot.Services;
 // These are resources, not necessarily the pixels currently displayed on screen.
 internal static class MemoryImageScanner
 {
+    // Mapped views and image (module) sections are not searched, so their resources are never reported.
+    private const uint MemMapped = 0x40000, MemImage = 0x1000000;
     private const uint Commit = 0x1000, Guard = 0x100, NoAccess = 0x01;
     private static readonly byte[] PngSignature = { 137, 80, 78, 71, 13, 10, 26, 10 };
     private static readonly SearchValues<byte> SignatureStarts = SearchValues.Create(new byte[] { 137, 255, 71, 66, 82 });
@@ -70,7 +72,7 @@ internal static class MemoryImageScanner
                 long length = (long)region.RegionSize;
                 if (length <= 0 || start < 0 || start > long.MaxValue - length) break;
                 long end = start + length;
-                if (region.State == Commit && (region.Protect & (Guard | NoAccess)) == 0 && IsReadable(region.Protect))
+                if (region.State == Commit && (region.Protect & (Guard | NoAccess)) == 0 && IsReadable(region.Protect) && (region.Type & (MemMapped | MemImage)) == 0)
                 {
                     result.RegionsRead++;
                     int previous = 0;
@@ -184,7 +186,13 @@ internal static class MemoryImageScanner
                                     {
                                         if (bitmap.Width == width && bitmap.Height == height)
                                         {
-                                            string regionKind = region.Type switch { 0x20000 => "Private", 0x40000 => "Mapped", 0x1000000 => "Image module", _ => "Unknown" };
+                                            string regionKind = region.Type switch 
+                                            { 
+                                                0x20000 => "Private",
+                                                0x40000 => "Mapped",
+                                                0x1000000 => "Image module",
+                                                _ => "Unknown"
+                                            };
                                             string format = kind switch { ImageKind.Png => "PNG", ImageKind.Jpeg => "JPEG", ImageKind.Gif => "GIF", ImageKind.Bmp => "BMP", _ => "WebP" };
                                             result.Candidates.Add(new Candidate(bitmap, format, hash, regionKind));
                                             bitmap = null; // Candidate owns the image now.
