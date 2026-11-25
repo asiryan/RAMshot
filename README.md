@@ -24,9 +24,11 @@ RAMshot читает только доступную память выбранн
 Нужны Windows и .NET 8 SDK с Windows Desktop Runtime:
 
 ```powershell
-dotnet build .\RAMshot.slnx -c Release
+dotnet build .\sources\RAMshot.csproj -c Release
 dotnet run --project .\sources\RAMshot.csproj -c Release
 ```
+
+Файл решения `RAMshot.slnx` открывается в Visual Studio 17.13+ и собирается .NET SDK 9.0.200+; сами проекты (`sources`, `tests`) собираются и на .NET 8 SDK.
 
 Проверка поиска по контролируемому содержимому памяти (включая границы блоков и продолжение по порциям):
 

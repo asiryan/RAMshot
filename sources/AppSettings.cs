@@ -24,19 +24,19 @@ internal sealed class AppSettings
 
     public string? Validate()
     {
-        if (MaxReadMiB is < 16 or > 2048) return "Scan size must be between 16 and 2048 MiB.";
-        if (MaxImageMiB is < 1 or > 64) return "Encoded image size must be between 1 and 64 MiB.";
-        if (MaxImageMiB >= MaxReadMiB) return "Scan size must exceed the encoded image limit.";
-        if (BatchSeconds is < 1 or > 30) return "Batch time must be between 1 and 30 seconds.";
-        if (MinDimension is < 1 or > 4096) return "Minimum dimension must be between 1 and 4096 pixels.";
-        if (MaxDimension is < 128 or > 4096) return "Maximum dimension must be between 128 and 4096 pixels.";
-        if (MinDimension > MaxDimension) return "Minimum dimension cannot exceed the maximum.";
-        if (MaxImages is < 1 or > 500) return "Image count must be between 1 and 500.";
-        if (GalleryMiB is < 16 or > 1024) return "Gallery memory must be between 16 and 1024 MiB.";
-        if (MaxCandidates is < 1 or > 256) return "Candidates per batch must be between 1 and 256.";
-        if (MaxSignatures is < 1 or > 65536) return "Signatures per batch must be between 1 and 65536.";
-        if (MaxDecodedMiB is < 4 or > 512) return "Decoded memory per batch must be between 4 and 512 MiB.";
-        if (ScanIntervalMs is < 250 or > 60000) return "Scan interval must be between 250 and 60000 milliseconds.";
+        if (MaxReadMiB is < 16 or > 2048) return "Scan size must be between 16 and 2048 MiB";
+        if (MaxImageMiB is < 1 or > 64) return "Encoded image size must be between 1 and 64 MiB";
+        if (MaxImageMiB >= MaxReadMiB) return "Scan size must exceed the encoded image limit";
+        if (BatchSeconds is < 1 or > 30) return "Batch time must be between 1 and 30 seconds";
+        if (MinDimension is < 1 or > 4096) return "Minimum dimension must be between 1 and 4096 pixels";
+        if (MaxDimension is < 128 or > 4096) return "Maximum dimension must be between 128 and 4096 pixels";
+        if (MinDimension > MaxDimension) return "Minimum dimension cannot exceed the maximum";
+        if (MaxImages is < 1 or > 500) return "Image count must be between 1 and 500";
+        if (GalleryMiB is < 16 or > 1024) return "Gallery memory must be between 16 and 1024 MiB";
+        if (MaxCandidates is < 1 or > 256) return "Candidates per batch must be between 1 and 256";
+        if (MaxSignatures is < 1 or > 65536) return "Signatures per batch must be between 1 and 65536";
+        if (MaxDecodedMiB is < 4 or > 512) return "Decoded memory per batch must be between 4 and 512 MiB";
+        if (ScanIntervalMs is < 250 or > 60000) return "Scan interval must be between 250 and 60000 milliseconds";
         return null;
     }
 

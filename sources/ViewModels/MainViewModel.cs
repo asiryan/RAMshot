@@ -285,17 +285,21 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             "WebP" => ("WebP image", "webp"),
             _ => ("PNG image", "png")
         };
-        var dialog = new SaveFileDialog
+        try
         {
-            Title = "Save image",
-            Filter = $"{name} (*.{extension})|*.{extension}",
-            DefaultExt = extension,
-            FileName = SaveFileName(selectedImage, extension),
-            AddExtension = true,
-            OverwritePrompt = true
-        };
-        if (dialog.ShowDialog() != true) return;
-        try { SaveImage(selectedImage, dialog.FileName); SaveLabel = "Saved"; }
+            var dialog = new SaveFileDialog
+            {
+                Title = "Save image",
+                Filter = $"{name} (*.{extension})|*.{extension}",
+                DefaultExt = extension,
+                FileName = SaveFileName(selectedImage, extension),
+                AddExtension = true,
+                OverwritePrompt = true
+            };
+            if (dialog.ShowDialog() != true) return;
+            SaveImage(selectedImage, dialog.FileName);
+            SaveLabel = "Saved";
+        }
         catch (Exception ex) { Status = $"Unable to save image (error 0x{ex.HResult:X8})"; }
     }
     // The name is the content hash, so identical bytes always produce the same file name.

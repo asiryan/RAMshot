@@ -70,7 +70,7 @@ internal static class MemoryImageScanner
                 if (VirtualQueryEx(process, new IntPtr(address), out var region, (nuint)Marshal.SizeOf<MemoryInfo>()) == 0) { result.IsEnd = true; break; }
                 long start = region.BaseAddress.ToInt64();
                 long length = (long)region.RegionSize;
-                if (length <= 0 || start < 0 || start > long.MaxValue - length) break;
+                if (length <= 0 || start < 0 || start > long.MaxValue - length) { result.IsEnd = true; break; }
                 long end = start + length;
                 if (region.State == Commit && (region.Protect & (Guard | NoAccess)) == 0 && IsReadable(region.Protect) && (region.Type & excludedRegionTypes) == 0)
                 {
