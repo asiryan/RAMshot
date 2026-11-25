@@ -109,7 +109,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             Changed(nameof(SelectedFormatLabel));
         });
         ApplySettingsCommand = new RelayCommand(_ => ApplySettings());
-        ToggleSettingsCommand = new RelayCommand(_ => SettingsVisibility = SettingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible);
+        ToggleSettingsCommand = new RelayCommand(_ => { SettingsVisibility = SettingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; ResetApplyLabel(); });
         RefreshTargets(initialWindow);
     }
 
