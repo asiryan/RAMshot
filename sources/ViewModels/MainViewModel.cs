@@ -314,7 +314,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (image.Format == "WebP") { SaveWebp(image.Image, path); return; }
         BitmapEncoder encoder = image.Format switch
         {
-            "JPEG" => new JpegBitmapEncoder { QualityLevel = 90 },
+            "JPEG" => new JpegBitmapEncoder { QualityLevel = 100 },
             "GIF" => new GifBitmapEncoder(),
             "BMP" => new BmpBitmapEncoder(),
             _ => new PngBitmapEncoder()

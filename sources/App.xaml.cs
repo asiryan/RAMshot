@@ -19,16 +19,17 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        instance = new Mutex(true, @"Local\RAMshot.SingleInstance", out bool created);
-        if (!created)
-        {
-            MessageBox.Show("RAMshot is already running. Open it from the system tray.", "RAMshot", MessageBoxButton.OK, MessageBoxImage.Information);
-            Shutdown();
-            return;
-        }
 
         try
         {
+            instance = new Mutex(true, @"Local\RAMshot.SingleInstance", out bool created);
+            if (!created)
+            {
+                MessageBox.Show("RAMshot is already running. Open it from the system tray.", "RAMshot", MessageBoxButton.OK, MessageBoxImage.Information);
+                Shutdown();
+                return;
+            }
+
             var menu = new Forms.ContextMenuStrip();
             menu.Items.Add("Open RAMshot", null, (_, _) => ShowWindow(lastForeground));
             menu.Items.Add(new Forms.ToolStripSeparator());

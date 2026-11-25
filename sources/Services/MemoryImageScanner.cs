@@ -126,10 +126,18 @@ internal static class MemoryImageScanner
                             ReadProcessMemory(process, new IntPtr(candidateAddress), header, (nuint)headerSize, out nuint headerRead);
                             int headerBytes = (int)Math.Min((ulong)headerRead, (ulong)headerSize);
                             result.BytesRead += headerBytes;
-                            if (kind != ImageKind.Webp && (!TryGetDimensions(header.AsSpan(0, headerBytes), kind, options, out int candidateWidth, out int candidateHeight) || candidateWidth < options.MinDimension || candidateHeight < options.MinDimension)) continue;
+                            int candidateLimit = (int)Math.Min(options.MaxImageBytes, end - candidateAddress);
+                            // A JPEG with large metadata segments can keep its SOF far past the small header.
+                            // Such a candidate is allowed through and the retry loop below reads further.
+                            if (kind != ImageKind.Webp)
+                            {
+                                bool dimensionsKnown = TryGetDimensions(header.AsSpan(0, headerBytes), kind, options, out int candidateWidth, out int candidateHeight, out bool truncated);
+                                bool canGrow = kind == ImageKind.Jpeg && truncated && headerBytes == headerSize && candidateLimit > headerBytes;
+                                if (!dimensionsKnown && !canGrow) continue;
+                                if (dimensionsKnown && (candidateWidth < options.MinDimension || candidateHeight < options.MinDimension)) continue;
+                            }
                             if (kind == ImageKind.Webp && (headerBytes < 12 || LittleEndian(header.AsSpan(4, 4)) < 4 || (long)LittleEndian(header.AsSpan(4, 4)) + 8 > options.MaxImageBytes)) continue;
                             seen.Add(candidateAddress);
-                            int candidateLimit = (int)Math.Min(options.MaxImageBytes, end - candidateAddress);
                             if (kind == ImageKind.Bmp)
                                 candidateLimit = (int)Math.Min(candidateLimit, LittleEndian(header.AsSpan(2, 4)));
                             else if (kind == ImageKind.Webp)
@@ -157,6 +165,8 @@ internal static class MemoryImageScanner
                             if (!found && (readBudgetReached || clock.Elapsed >= options.MaxElapsed || cancellationToken.IsCancellationRequested)) break;
                             if (found && width >= options.MinDimension && height >= options.MinDimension)
                             {
+                                // Decoding and hashing can be expensive; do not start them when the batch is already done.
+                                if (cancellationToken.IsCancellationRequested || clock.Elapsed >= options.MaxElapsed) break;
                                 try
                                 {
                                     string hash = Convert.ToHexString(SHA256.HashData(data.AsSpan(0, imageLength)));
@@ -234,11 +244,12 @@ internal static class MemoryImageScanner
     private static uint BigEndian(ReadOnlySpan<byte> b) => ((uint)b[0] << 24) | ((uint)b[1] << 16) | ((uint)b[2] << 8) | b[3];
     private static uint LittleEndian(ReadOnlySpan<byte> b) => (uint)b[0] | ((uint)b[1] << 8) | ((uint)b[2] << 16) | ((uint)b[3] << 24);
 
-    private static bool TryGetDimensions(ReadOnlySpan<byte> bytes, ImageKind kind, ScanOptions options, out int width, out int height)
+    private static bool TryGetDimensions(ReadOnlySpan<byte> bytes, ImageKind kind, ScanOptions options, out int width, out int height, out bool truncated)
     {
         if (kind is ImageKind.Png or ImageKind.Jpeg)
-            return TryGetDimensions(bytes, kind == ImageKind.Png, options, out width, out height);
+            return TryGetDimensions(bytes, kind == ImageKind.Png, options, out width, out height, out truncated);
         width = height = 0;
+        truncated = false;
         if (kind == ImageKind.Gif)
         {
             if (bytes.Length < 13 || !(bytes[..6].SequenceEqual("GIF87a"u8) || bytes[..6].SequenceEqual("GIF89a"u8))) return false;
@@ -275,7 +286,7 @@ internal static class MemoryImageScanner
         length = width = height = 0;
         if (kind == ImageKind.Bmp)
         {
-            if (!TryGetDimensions(bytes, kind, options, out width, out height)) return false;
+            if (!TryGetDimensions(bytes, kind, options, out width, out height, out _)) return false;
             uint size = LittleEndian(bytes.Slice(2, 4));
             if (size > bytes.Length) return false;
             length = (int)size;
@@ -283,7 +294,7 @@ internal static class MemoryImageScanner
         }
         if (kind == ImageKind.Gif)
         {
-            if (!TryGetDimensions(bytes, kind, options, out width, out height)) return false;
+            if (!TryGetDimensions(bytes, kind, options, out width, out height, out _)) return false;
             int pos = 13;
             if ((bytes[10] & 0x80) != 0) pos += 3 * (1 << ((bytes[10] & 7) + 1));
             bool hasImage = false;
@@ -359,9 +370,10 @@ internal static class MemoryImageScanner
         return false;
     }
 
-    private static bool TryGetDimensions(ReadOnlySpan<byte> bytes, bool png, ScanOptions options, out int width, out int height)
+    private static bool TryGetDimensions(ReadOnlySpan<byte> bytes, bool png, ScanOptions options, out int width, out int height, out bool truncated)
     {
         width = height = 0;
+        truncated = false;
         if (png)
         {
             if (bytes.Length < 33 || !bytes[..8].SequenceEqual(PngSignature) || BigEndian(bytes.Slice(8, 4)) != 13 || !bytes.Slice(12, 4).SequenceEqual("IHDR"u8)) return false;
@@ -369,17 +381,20 @@ internal static class MemoryImageScanner
             if (w > options.MaxDimension || h > options.MaxDimension || !ValidDimensions((int)w, (int)h, options)) return false;
             width = (int)w; height = (int)h; return true;
         }
-        if (bytes.Length < 4 || bytes[0] != 0xff || bytes[1] != 0xd8) return false;
+        if (bytes.Length < 2 || bytes[0] != 0xff || bytes[1] != 0xd8) return false;
+        if (bytes.Length < 4) { truncated = true; return false; }
         int p = 2;
         while (p + 4 <= bytes.Length)
         {
             if (bytes[p++] != 0xff) return false;
             while (p < bytes.Length && bytes[p] == 0xff) p++;
-            if (p >= bytes.Length) return false;
+            if (p >= bytes.Length) { truncated = true; return false; }
             int marker = bytes[p++];
-            if (marker is 0xda or 0xd8 or 0xd9 or 0x00 || p + 2 > bytes.Length) return false;
+            if (marker is 0xda or 0xd8 or 0xd9 or 0x00) return false;
+            if (p + 2 > bytes.Length) { truncated = true; return false; }
             int size = (bytes[p] << 8) | bytes[p + 1];
-            if (size < 2 || size > bytes.Length - p) return false;
+            if (size < 2) return false;
+            if (size > bytes.Length - p) { truncated = true; return false; }
             if (marker is 0xc0 or 0xc1 or 0xc2 or 0xc3 or 0xc5 or 0xc6 or 0xc7 or 0xc9 or 0xca or 0xcb or 0xcd or 0xce or 0xcf)
             {
                 if (size < 7) return false;
@@ -389,6 +404,7 @@ internal static class MemoryImageScanner
             }
             p += size;
         }
+        truncated = true;
         return false;
     }
 

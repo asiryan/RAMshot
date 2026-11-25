@@ -65,8 +65,39 @@ try
     // Synthetic two-frame 256x256 WebP; the first frame has alpha 128.
     var animatedWebp = Convert.FromBase64String("UklGRoYAAABXRUJQVlA4WAoAAAASAAAA/wAA/wAAQU5JTQYAAAAAAAAAAABBTk1GKgAAAAAAAAAAAP8AAP8AAGQAAAJWUDhMEQAAAC//wD8QB1CojhS5gIGI6H8AAEFOTUYoAAAAAAAAAAAA/wAA/wAAZAAAAlZQOEwPAAAAL//APwAHENH//gciov8BAA==");
     CheckAnimation(animatedWebp, "WebP", 128, 128, color => color.A == 128 && Math.Abs(color.R - 35) < 10);
+
+    // A JPEG whose APP2 metadata pushes the SOF past the 64 KiB header must still be found.
+    byte[] largeMetadataJpeg = JpegWithLargeMetadata();
+    Marshal.Copy(largeMetadataJpeg, 0, allocation, largeMetadataJpeg.Length);
+    var largeOptions = new ScanOptions(maxReadBytes: 256 * 1024, maxImageBytes: 128 * 1024,
+        chunkSize: 65536, maxCandidates: 1, maxElapsed: TimeSpan.FromSeconds(3), minDimension: 128, maxDimension: 256, maxPixels: 65536);
+    using (var result = MemoryImageScanner.Scan(hwnd, allocation.ToInt64(), default, (uint)Environment.ProcessId, largeOptions))
+    {
+        string expectedHash = Convert.ToHexString(SHA256.HashData(largeMetadataJpeg));
+        if (!result.Candidates.Any(candidate => candidate.Hash == expectedHash))
+            throw new Exception("JPEG with a large metadata segment was not found");
+    }
+    Console.WriteLine("PASS JPEG with >64 KiB metadata");
 }
 finally { Native.VirtualFree(allocation, 0, 0x8000); }
+
+static byte[] JpegWithLargeMetadata()
+{
+    using var image = new Bitmap(180, 160);
+    using (var graphics = Graphics.FromImage(image)) graphics.Clear(Color.Blue);
+    using var stream = new MemoryStream();
+    image.Save(stream, ImageFormat.Jpeg);
+    byte[] jpeg = stream.ToArray();
+    const int payload = 65533; // largest payload that still fits the 16-bit segment length
+    var result = new byte[2 + 4 + payload + jpeg.Length - 2];
+    result[0] = 0xFF; result[1] = 0xD8;
+    result[2] = 0xFF; result[3] = 0xE2;
+    int length = payload + 2;
+    result[4] = (byte)(length >> 8); result[5] = (byte)length;
+    for (int i = 0; i < payload; i++) result[6 + i] = (byte)(i % 251);
+    Buffer.BlockCopy(jpeg, 2, result, 6 + payload, jpeg.Length - 2);
+    return result;
+}
 
 static byte[] AnimatedGif()
 {
