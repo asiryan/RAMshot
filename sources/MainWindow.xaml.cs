@@ -24,6 +24,17 @@ public partial class MainWindow : Window
         Show(); WindowState = WindowState.Normal; Activate();
     }
     public void Shutdown() { shutdown = true; viewModel.Dispose(); Close(); }
+    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.A && Keyboard.Modifiers == ModifierKeys.Control &&
+            Keyboard.FocusedElement is not System.Windows.Controls.TextBox)
+        {
+            viewModel.SelectAllImages();
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewKeyDown(e);
+    }
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);

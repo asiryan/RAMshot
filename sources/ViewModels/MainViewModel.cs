@@ -81,6 +81,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string SaveLabel { get => saveLabel; private set { saveLabel = value; Changed(); } }
     public string ApplyLabel { get => applyLabel; private set { applyLabel = value; Changed(); } }
     public bool ShowEmptyHint => selectedTarget is null && Images.Count == 0;
+    public ImageEntry? SelectedImage => selectedImage;
     public BitmapSource? SelectedPreview { get => selectedPreview; private set { if (ReferenceEquals(selectedPreview, value)) return; selectedPreview = value; Changed(); } }
     public string SelectedRegionLabel => selectedImage is null ? "" : $"First found in: {selectedImage.RegionKind} region";
     public string SelectedFormatLabel { get => selectedFormatLabel; private set { if (selectedFormatLabel == value) return; selectedFormatLabel = value; Changed(); } }
@@ -149,22 +150,60 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
     private void SelectImage(object? value)
     {
-        var previous = selectedImage;
-        if (selectedImage is not null) selectedImage.IsSelected = false;
-        selectedImage = value as ImageEntry;
-        if (selectedImage is not null) selectedImage.IsSelected = true;
-        if (!ReferenceEquals(previous, selectedImage)) { CopyLabel = "Copy"; SaveLabel = "Save"; }
-        if (selectedImage is not null)
+        if (value is not ImageEntry entry) return;
+        ApplySelection(entry, (Keyboard.Modifiers & ModifierKeys.Control) != 0);
+    }
+    internal void ApplySelection(ImageEntry entry, bool extendSelection)
+    {
+        CopyLabel = "Copy";
+        SaveLabel = "Save";
+        if (!extendSelection)
         {
-            // Collapsing the settings panel must not restart the preview for the previously selected image.
-            suppressPreviewRestart = true;
-            SettingsVisibility = Visibility.Collapsed;
-            suppressPreviewRestart = false;
-            ApplyLabel = "Apply settings";
+            foreach (var image in Images) image.IsSelected = false;
+            entry.IsSelected = true;
+            ShowPreview(entry);
+            return;
         }
-        SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
-        BeginPreview(selectedImage);
+        if (entry.IsSelected)
+        {
+            entry.IsSelected = false;
+            if (ReferenceEquals(selectedImage, entry))
+                ShowPreview(Images.LastOrDefault(image => image.IsSelected));
+            return;
+        }
+        entry.IsSelected = true;
+        ShowPreview(entry);
+    }
+    internal void SelectAllImages()
+    {
+        if (Images.Count == 0) return;
+        foreach (var image in Images) image.IsSelected = true;
+        ImageEntry preview = selectedImage is not null && selectedImage.IsSelected ? selectedImage : Images[0];
+        ShowPreview(preview);
+    }
+    private void ShowPreview(ImageEntry? image)
+    {
+        if (image is not null) CloseSettingsPanel();
+        SetSelectedImage(image);
+        SelectedLabel = image is null ? "No image selected" : image.Label;
+        BeginPreview(image);
+        CopyLabel = "Copy";
+        SaveLabel = "Save";
         Changed(nameof(SelectedRegionLabel));
+    }
+    private void CloseSettingsPanel()
+    {
+        // Collapsing the settings panel must not restart the preview through the visibility setter.
+        suppressPreviewRestart = true;
+        SettingsVisibility = Visibility.Collapsed;
+        suppressPreviewRestart = false;
+        ApplyLabel = "Apply settings";
+    }
+    private void SetSelectedImage(ImageEntry? image)
+    {
+        if (ReferenceEquals(selectedImage, image)) return;
+        selectedImage = image;
+        Changed(nameof(SelectedImage));
     }
     // Shows the thumbnail immediately and decodes the full image (or animation frames) in the background.
     private void BeginPreview(ImageEntry? image)
@@ -284,7 +323,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         Changed(nameof(PauseLabel)); Restart(false);
     }
     private void Cancel() { generation++; cancellation?.Cancel(); cancellation = null; }
-    private void Clear() { StopAnimation(); Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; selectedImage = null; SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; SelectedPreview = null; SelectedFormatLabel = ""; previewIsFull = false; Changed(nameof(SelectedRegionLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
+    private void Clear() { StopAnimation(); Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; SetSelectedImage(null); SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; SelectedPreview = null; SelectedFormatLabel = ""; previewIsFull = false; Changed(nameof(SelectedRegionLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
     private void Restart(bool clear)
     {
         Cancel();
@@ -434,17 +473,48 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             ?? throw new InvalidOperationException("Image decoding failed.");
         return ConvertImage(bitmap);
     }
-    private void SaveSelected()
+    private async void SaveSelected()
     {
-        if (selectedImage is null) { Status = "Select an image first"; return; }
-        var (name, extension) = selectedImage.Format switch
+        var selection = Images.Where(image => image.IsSelected).ToList();
+        if (selection.Count == 0) { Status = "Select an image first"; return; }
+        if (selection.Count == 1) { SaveSingle(selection[0]); return; }
+        string folder;
+        try
         {
-            "JPEG" => ("JPEG image", "jpg"),
-            "GIF" => ("GIF image", "gif"),
-            "BMP" => ("BMP image", "bmp"),
-            "WebP" => ("WebP image", "webp"),
-            _ => ("PNG image", "png")
-        };
+            var dialog = new OpenFolderDialog { Title = "Save images" };
+            if (dialog.ShowDialog() != true) return;
+            folder = dialog.FolderName;
+        }
+        catch (Exception ex) { Status = $"Unable to choose a folder (error 0x{ex.HResult:X8})"; return; }
+        if (string.IsNullOrWhiteSpace(folder)) return;
+        Status = $"Saving {selection.Count} images...";
+        int saved, failed;
+        try
+        {
+            (saved, failed) = await Task.Run(() => SaveImagesToFolder(selection, folder));
+        }
+        catch (Exception ex) { Status = $"Unable to save images (error 0x{ex.HResult:X8})"; return; }
+        SaveLabel = failed == 0 ? "Saved" : "Save";
+        Status = failed == 0 ? $"Saved {saved} images to {folder}" : $"Saved {saved} images, {failed} failed";
+    }
+    private static (int Saved, int Failed) SaveImagesToFolder(IReadOnlyList<ImageEntry> images, string folder)
+    {
+        int saved = 0, failed = 0;
+        foreach (var image in images)
+        {
+            try
+            {
+                var (_, extension) = GetSaveFormat(image);
+                SaveImage(image, Path.Combine(folder, SaveFileName(image, extension)));
+                saved++;
+            }
+            catch { failed++; }
+        }
+        return (saved, failed);
+    }
+    private void SaveSingle(ImageEntry image)
+    {
+        var (name, extension) = GetSaveFormat(image);
         try
         {
             var dialog = new SaveFileDialog
@@ -452,16 +522,24 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 Title = "Save image",
                 Filter = $"{name} (*.{extension})|*.{extension}",
                 DefaultExt = extension,
-                FileName = SaveFileName(selectedImage, extension),
+                FileName = SaveFileName(image, extension),
                 AddExtension = true,
                 OverwritePrompt = true
             };
             if (dialog.ShowDialog() != true) return;
-            SaveImage(selectedImage, dialog.FileName);
+            SaveImage(image, dialog.FileName);
             SaveLabel = "Saved";
         }
         catch (Exception ex) { Status = $"Unable to save image (error 0x{ex.HResult:X8})"; }
     }
+    private static (string Name, string Extension) GetSaveFormat(ImageEntry image) => image.Format switch
+    {
+        "JPEG" => ("JPEG image", "jpg"),
+        "GIF" => ("GIF image", "gif"),
+        "BMP" => ("BMP image", "bmp"),
+        "WebP" => ("WebP image", "webp"),
+        _ => ("PNG image", "png")
+    };
     // The name is the content hash, so identical bytes always produce the same file name.
     private static string SaveFileName(ImageEntry image, string extension)
     {
