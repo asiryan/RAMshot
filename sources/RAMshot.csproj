@@ -10,6 +10,18 @@
     <RootNamespace>RAMshot</RootNamespace>
     <ApplicationIcon>Assets\RAMshot.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <IsPackable>false</IsPackable>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+    <Product>RAMshot</Product>
+    <Company>Valery Asiryan</Company>
+    <Authors>Valery Asiryan</Authors>
+    <Copyright>© 2026 Valery Asiryan</Copyright>
+    <Description>.NET tool for Windows that finds images in process memory</Description>
+    <RepositoryUrl>https://github.com/asiryan/RAMshot</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\RAMshot.ico" />
