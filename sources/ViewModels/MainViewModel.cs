@@ -38,7 +38,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string status = "Select a process to start scanning", settingsStatus = "", selectedLabel = "No image selected", copyLabel = "Copy selected";
     private Visibility settingsVisibility = Visibility.Collapsed;
     public event PropertyChangedEventHandler? PropertyChanged;
-    public event EventHandler? HideRequested;
     public event EventHandler? SettingsChanged;
     public ObservableCollection<Target> Targets { get; } = new();
     public ObservableCollection<ImageEntry> Images { get; } = new();
@@ -49,7 +48,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SelectImageCommand { get; }
     public ICommand ApplySettingsCommand { get; }
     public ICommand ToggleSettingsCommand { get; }
-    public ICommand HideCommand { get; }
     public string ReadMiB { get; set; }
     public string ImageMiB { get; set; }
     public string BatchSeconds { get; set; }
@@ -103,6 +101,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             selectedImage = value as ImageEntry;
             if (selectedImage is not null) selectedImage.IsSelected = true;
             if (!ReferenceEquals(previous, selectedImage)) CopyLabel = "Copy selected";
+            if (selectedImage is not null) SettingsVisibility = Visibility.Collapsed;
             SelectedLabel = selectedImage is null ? "No image selected" : selectedImage.Label;
             Changed(nameof(SelectedPreview));
             Changed(nameof(SelectedRegionLabel));
@@ -110,7 +109,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         });
         ApplySettingsCommand = new RelayCommand(_ => ApplySettings());
         ToggleSettingsCommand = new RelayCommand(_ => SettingsVisibility = SettingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible);
-        HideCommand = new RelayCommand(_ => HideRequested?.Invoke(this, EventArgs.Empty));
         RefreshTargets(initialWindow);
     }
 

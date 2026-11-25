@@ -17,7 +17,6 @@ public partial class MainWindow : Window
         InitializeComponent();
         viewModel = new MainViewModel(initialWindow);
         DataContext = viewModel;
-        viewModel.HideRequested += (_, _) => Hide();
     }
     public void ShowAndActivate(IntPtr target)
     {
