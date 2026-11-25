@@ -2,6 +2,8 @@
 
 A Windows application built with C# and WPF that searches for PNG, JPEG, GIF, BMP, and WebP images in the readable memory of the selected process. Found images appear in the gallery and stay in memory; the selected image can be copied to the clipboard or saved to disk in the same format. Animated GIF and WebP files show and save their first frame.
 
+![RAMshot](docs/qa2-preview.png)
+
 ## Usage
 
 1. Launch RAMshot. It tries to select the most recently active window and starts scanning immediately; verify the selected process and change it in the list if needed.
