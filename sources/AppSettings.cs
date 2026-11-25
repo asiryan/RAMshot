@@ -17,6 +17,8 @@ internal sealed class AppSettings
     public int MaxDecodedMiB { get; set; } = 100;
     public int ScanIntervalMs { get; set; } = 1000;
     public bool HotkeyEnabled { get; set; } = true;
+    public bool IncludeMappedRegions { get; set; }
+    public bool IncludeImageRegions { get; set; }
 
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 
@@ -48,6 +50,7 @@ internal sealed class AppSettings
             maxDecodedBytes: (long)MaxDecodedMiB * 1024 * 1024,
             maxElapsed: TimeSpan.FromSeconds(BatchSeconds),
             minDimension: MinDimension, maxDimension: MaxDimension,
-            maxPixels: (long)MaxDimension * MaxDimension);
+            maxPixels: (long)MaxDimension * MaxDimension,
+            includeMappedRegions: IncludeMappedRegions, includeImageRegions: IncludeImageRegions);
     }
 }

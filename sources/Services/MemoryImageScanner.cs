@@ -12,7 +12,7 @@ namespace RAMshot.Services;
 // These are resources, not necessarily the pixels currently displayed on screen.
 internal static class MemoryImageScanner
 {
-    // Mapped views and image (module) sections are not searched, so their resources are never reported.
+    // Mapped views and image (module) sections are searched only when enabled in the scan settings.
     private const uint MemMapped = 0x40000, MemImage = 0x1000000;
     private const uint Commit = 0x1000, Guard = 0x100, NoAccess = 0x01;
     private static readonly byte[] PngSignature = { 137, 80, 78, 71, 13, 10, 26, 10 };
@@ -44,6 +44,7 @@ internal static class MemoryImageScanner
     internal static ScanResult Scan(IntPtr window, long startAddress = 0, CancellationToken cancellationToken = default, uint expectedProcessId = 0, ScanOptions? options = null)
     {
         options ??= ScanOptions.Default;
+        uint excludedRegionTypes = (options.IncludeMappedRegions ? 0u : MemMapped) | (options.IncludeImageRegions ? 0u : MemImage);
         if (startAddress < 0) throw new ArgumentOutOfRangeException(nameof(startAddress));
         if (!Environment.Is64BitProcess) throw new PlatformNotSupportedException("Memory scan requires a 64-bit process.");
         if (window == IntPtr.Zero || GetWindowThreadProcessId(window, out uint pid) == 0 || pid == 0)
@@ -72,7 +73,7 @@ internal static class MemoryImageScanner
                 long length = (long)region.RegionSize;
                 if (length <= 0 || start < 0 || start > long.MaxValue - length) break;
                 long end = start + length;
-                if (region.State == Commit && (region.Protect & (Guard | NoAccess)) == 0 && IsReadable(region.Protect) && (region.Type & (MemMapped | MemImage)) == 0)
+                if (region.State == Commit && (region.Protect & (Guard | NoAccess)) == 0 && IsReadable(region.Protect) && (region.Type & excludedRegionTypes) == 0)
                 {
                     result.RegionsRead++;
                     int previous = 0;

@@ -62,6 +62,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string GalleryMiB { get; set; }
     public string IntervalMs { get; set; }
     public bool HotkeyEnabled { get; set; }
+    public bool IncludeMappedRegions { get; set; }
+    public bool IncludeImageRegions { get; set; }
     public bool IsHotkeyEnabled => settings.HotkeyEnabled;
     public string HotkeyHelp => settings.HotkeyEnabled ? "Images stay in memory · Ctrl + Shift + F12" : "Images stay in memory · Hotkey disabled";
     public string Status { get => status; private set { status = value; Changed(); } }
@@ -88,6 +90,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         ReadMiB = settings.MaxReadMiB.ToString(); ImageMiB = settings.MaxImageMiB.ToString(); BatchSeconds = settings.BatchSeconds.ToString();
         MaxCandidates = settings.MaxCandidates.ToString(); MaxSignatures = settings.MaxSignatures.ToString(); MaxDecodedMiB = settings.MaxDecodedMiB.ToString();
         MinDimension = settings.MinDimension.ToString(); MaxDimension = settings.MaxDimension.ToString(); MaxImages = settings.MaxImages.ToString(); GalleryMiB = settings.GalleryMiB.ToString(); IntervalMs = settings.ScanIntervalMs.ToString(); HotkeyEnabled = settings.HotkeyEnabled;
+        IncludeMappedRegions = settings.IncludeMappedRegions; IncludeImageRegions = settings.IncludeImageRegions;
         RefreshCommand = new RelayCommand(_ => RefreshTargets(SelectedTarget?.Handle ?? IntPtr.Zero));
         PauseCommand = new RelayCommand(_ => TogglePause());
         ClearCommand = new RelayCommand(_ => { if (stoppedForLimit) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); } Clear(); if (!paused) Restart(false); });
@@ -187,7 +190,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     var sourceOptions = active.ToScanOptions();
                     var scanOptions = new ScanOptions(sourceOptions.MaxReadBytes, sourceOptions.MaxImageBytes,
                         sourceOptions.ChunkSize, Math.Min(sourceOptions.MaxCandidates, remainingSlots), sourceOptions.MaxSignatures,
-                        sourceOptions.MaxDecodedBytes, sourceOptions.MaxElapsed, sourceOptions.MinDimension, sourceOptions.MaxDimension, sourceOptions.MaxPixels);
+                        sourceOptions.MaxDecodedBytes, sourceOptions.MaxElapsed, sourceOptions.MinDimension, sourceOptions.MaxDimension, sourceOptions.MaxPixels,
+                        sourceOptions.IncludeMappedRegions, sourceOptions.IncludeImageRegions);
                     batch = await Task.Run<ScanBatch?>(() =>
                     {
                         if (token.IsCancellationRequested) return null;
@@ -289,7 +293,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private void ApplySettings()
     {
         if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits."; return; }
-        var updated = new AppSettings { MaxReadMiB=read, MaxImageMiB=image, BatchSeconds=seconds, MaxCandidates=candidates, MaxSignatures=signatures, MaxDecodedMiB=decoded, MinDimension=min, MaxDimension=max, MaxImages=count, GalleryMiB=gallery, ScanIntervalMs=interval, HotkeyEnabled=HotkeyEnabled };
+        var updated = new AppSettings { MaxReadMiB=read, MaxImageMiB=image, BatchSeconds=seconds, MaxCandidates=candidates, MaxSignatures=signatures, MaxDecodedMiB=decoded, MinDimension=min, MaxDimension=max, MaxImages=count, GalleryMiB=gallery, ScanIntervalMs=interval, HotkeyEnabled=HotkeyEnabled, IncludeMappedRegions=IncludeMappedRegions, IncludeImageRegions=IncludeImageRegions };
         if (updated.Validate() is string error) { SettingsStatus = error; return; }
         try { store.Save(updated); settings = updated; SettingsStatus = "Settings saved. Changes apply to the next scan batch."; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
         catch (Exception ex) { SettingsStatus = $"Unable to save settings (error 0x{ex.HResult:X8})."; }

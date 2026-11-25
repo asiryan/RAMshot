@@ -14,12 +14,15 @@ internal sealed class ScanOptions
     internal int MinDimension { get; }
     internal int MaxDimension { get; }
     internal long MaxPixels { get; }
+    internal bool IncludeMappedRegions { get; }
+    internal bool IncludeImageRegions { get; }
 
     internal ScanOptions(long maxReadBytes = 512L * 1024 * 1024,
         int maxImageBytes = 16 * 1024 * 1024, int chunkSize = 256 * 1024,
         int maxCandidates = 12, int maxSignatures = 4096,
         long maxDecodedBytes = 100L * 1024 * 1024, TimeSpan? maxElapsed = null,
-        int minDimension = 128, int maxDimension = 4096, long maxPixels = 16_000_000)
+        int minDimension = 128, int maxDimension = 4096, long maxPixels = 16_000_000,
+        bool includeMappedRegions = false, bool includeImageRegions = false)
     {
         TimeSpan elapsed = maxElapsed ?? TimeSpan.FromSeconds(2);
         if (maxReadBytes is < 65536 or > 2L * 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(maxReadBytes));
@@ -44,5 +47,7 @@ internal sealed class ScanOptions
         MinDimension = minDimension;
         MaxDimension = maxDimension;
         MaxPixels = maxPixels;
+        IncludeMappedRegions = includeMappedRegions;
+        IncludeImageRegions = includeImageRegions;
     }
 }
