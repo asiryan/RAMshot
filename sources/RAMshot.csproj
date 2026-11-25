@@ -9,6 +9,7 @@
     <AssemblyName>RAMshot</AssemblyName>
     <RootNamespace>RAMshot</RootNamespace>
     <ApplicationIcon>Assets\RAMshot.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <Resource Include="Assets\RAMshot.ico" />
