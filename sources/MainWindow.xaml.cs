@@ -89,12 +89,14 @@ public partial class MainWindow : Window
     }
     protected override void OnClosing(CancelEventArgs e)
     {
+        Hint.HideAll();
         if (!shutdown) { e.Cancel = true; Hide(); }
         base.OnClosing(e);
     }
     protected override void OnStateChanged(EventArgs e)
     {
         base.OnStateChanged(e);
+        if (WindowState == WindowState.Minimized) Hint.HideAll();
         if (MaximizeGlyph is not null)
             MaximizeGlyph.Text = WindowState == WindowState.Maximized ? "\uE923" : "\uE922";
     }
