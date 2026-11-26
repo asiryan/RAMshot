@@ -214,7 +214,7 @@ internal static class AppCatalog
     private static Target BuildTarget(uint rootPid, Dictionary<uint, (string Name, uint Parent)> snapshot,
         Dictionary<uint, List<uint>> children, uint self, bool isUwp)
     {
-        string name = snapshot.TryGetValue(rootPid, out var rootInfo) ? rootInfo.Name : $"PID {rootPid}";
+        string name = snapshot.TryGetValue(rootPid, out var rootInfo) ? StripExe(rootInfo.Name) : $"PID {rootPid}";
         var target = new Target { RootPid = rootPid, Name = name, IsUwp = isUwp, Icon = ExtractIcon(rootPid) };
         target.Processes.Add(new ProcessRef(rootPid, GetStartTicks(rootPid)));
         foreach (uint pid in Descendants(rootPid, children, self))
@@ -269,6 +269,10 @@ internal static class AppCatalog
     // names do not. Match either form so both call sites agree.
     private static bool NameEquals(string actual, string expected) =>
         actual.Equals(expected, StringComparison.OrdinalIgnoreCase) || actual.Equals(expected + ".exe", StringComparison.OrdinalIgnoreCase);
+
+    // Drop the ".exe" extension for the display name, matching the original ProcessName output.
+    private static string StripExe(string fileName) =>
+        fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? fileName[..^4] : fileName;
 
     private static bool IsIgnoredClass(string cls) => cls is
         "Shell_TrayWnd" or "Shell_SecondaryTrayWnd" or "Progman" or "WorkerW" or "NotifyIconOverflowWindow"
