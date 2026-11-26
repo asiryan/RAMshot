@@ -5,7 +5,7 @@ using System.Windows.Media;
 
 namespace RAMshot.Controls;
 
-// Shows the selected image on a checkerboard and supports wheel zoom, middle-drag panning and double-click reset.
+// Shows the selected image on a checkerboard and supports wheel zoom, middle-drag panning and right double-click reset.
 public partial class ZoomableImage : UserControl
 {
     private const double MinScale = 1.0;
@@ -105,8 +105,8 @@ public partial class ZoomableImage : UserControl
 
     private void OnMouseDown(object sender, MouseButtonEventArgs e)
     {
-        // Left double click resets the view.
-        if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2)
+        // Right double click resets the view.
+        if (e.ChangedButton == MouseButton.Right && e.ClickCount == 2)
         {
             ResetView();
             e.Handled = true;
