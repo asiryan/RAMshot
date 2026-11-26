@@ -308,7 +308,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (image.Format is not ("GIF" or "WebP")) return image.Format;
         if (limited) return $"{image.Format} · animation (preview limited)";
-        if (isAnimated) return $"{image.Format} · animation, {frameCount} frames";
+        if (isAnimated) return $"{image.Format} · animation, {frameCount.Declension("frame", "frames")}";
         return $"{image.Format} · static";
     }
     private void TogglePause()
