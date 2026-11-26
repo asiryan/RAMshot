@@ -129,7 +129,13 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         RefreshTargets(initialWindow);
     }
 
-    public void SelectWindow(IntPtr hwnd) { if (hwnd != IntPtr.Zero && SelectedTarget is null) RefreshTargets(hwnd); }
+    public void SelectWindow(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        // Refresh the list whenever the window is shown again, but keep the current selection by PID;
+        // when nothing is selected, fall back to the supplied (foreground) window as before.
+        RefreshTargets(SelectedTarget?.Handle ?? hwnd);
+    }
     private void RefreshTargets(IntPtr preferred)
     {
         Target? previous = SelectedTarget;
@@ -380,7 +386,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                             long size = (long)thumbnailWidth * thumbnailHeight * 4 + candidate.EncodedBytes.Length;
                             // A single image that is larger than the entire gallery can never fit.
                             if (size > galleryLimit) continue;
-                            if (remainingSlots <= 0 || size > remainingBytes)
+                            if (size > remainingBytes)
                             {
                                 limitReached = true;
                                 requiredBytes = size;
@@ -389,7 +395,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                             // Freeze the thumbnail on the worker before handing it to the UI.
                             BitmapSource thumbnail = CreateThumbnail(candidate.Image);
                             converted.Add(new ConvertedImage(thumbnail, candidate.Hash, candidate.Image.Width, candidate.Image.Height, size, candidate.RegionKind, candidate.Format, candidate.EncodedBytes));
-                            remainingSlots--;
                             remainingBytes -= size;
                         }
                         return new ScanBatch(converted, scan.BytesRead, scan.NextAddress, scan.IsEnd, limitReached, requiredBytes);
@@ -407,7 +412,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images"; return; }
                 scanCursor = batch.IsEnd ? 0 : batch.NextAddress;
                 if (portionAdded >= portionQuota)
-                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next batch"; return; }
+                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next portion"; return; }
                 if (batch.IsEnd)
                 { paused = true; stoppedForLimit = false; stopReason = StopReason.End; Changed(nameof(PauseLabel)); Status = "Scan complete. Press Resume to search again"; return; }
                 Status = $"{target.Name} · {Images.Count} images · {batch.BytesRead / 1048576} MiB scanned";
@@ -450,6 +455,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (selectedImage is null) { Status = "Select an image first"; return; }
         ImageEntry entry = selectedImage;
         BitmapSource? preview = SelectedPreview;
+        // previewIsFull == true means SelectedPreview is already a full-resolution frame (for an animation,
+        // the currently displayed frame). While the preview is still decoding, the first frame is copied instead.
         BitmapSource? image = previewIsFull ? preview : null;
         if (image is null)
         {
@@ -603,7 +610,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         if (!int.TryParse(ReadMiB,out int read) || !int.TryParse(ImageMiB,out int image) || !int.TryParse(BatchSeconds,out int seconds) || !int.TryParse(MaxCandidates,out int candidates) || !int.TryParse(MaxSignatures,out int signatures) || !int.TryParse(MaxDecodedMiB,out int decoded) || !int.TryParse(MinDimension,out int min) || !int.TryParse(MaxDimension,out int max) || !int.TryParse(MaxImages,out int count) || !int.TryParse(GalleryMiB,out int gallery) || !int.TryParse(IntervalMs,out int interval)) { SettingsStatus = "Enter whole numbers for all limits"; return; }
         var updated = new AppSettings { MaxReadMiB=read, MaxImageMiB=image, BatchSeconds=seconds, MaxCandidates=candidates, MaxSignatures=signatures, MaxDecodedMiB=decoded, MinDimension=min, MaxDimension=max, MaxImages=count, GalleryMiB=gallery, ScanIntervalMs=interval, HotkeyEnabled=HotkeyEnabled, ShowTooltips=ShowTooltips, IncludeMappedRegions=IncludeMappedRegions, IncludeImageRegions=IncludeImageRegions };
         if (updated.Validate() is string error) { SettingsStatus = error; return; }
-        try { store.Save(updated); settings = updated; tooltipsEnabled = updated.ShowTooltips; Changed(nameof(TooltipsEnabled)); ApplyLabel = "Applied"; SettingsStatus = "Settings saved. Changes apply to the next scan batch"; Changed(nameof(HotkeyHelp)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
+        try { store.Save(updated); settings = updated; tooltipsEnabled = updated.ShowTooltips; Changed(nameof(TooltipsEnabled)); ApplyLabel = "Applied"; SettingsStatus = "Settings saved. Changes apply to the next scan batch"; Changed(nameof(HotkeyHelp)); Changed(nameof(IsHotkeyEnabled)); SettingsChanged?.Invoke(this, EventArgs.Empty); }
         catch (Exception ex) { SettingsStatus = $"Unable to save settings (error 0x{ex.HResult:X8})"; }
     }
     private void Changed([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

@@ -21,11 +21,14 @@ internal sealed class ScanOptions
         int maxImageBytes = 16 * 1024 * 1024, int chunkSize = 256 * 1024,
         int maxCandidates = 12, int maxSignatures = 4096,
         long maxDecodedBytes = 100L * 1024 * 1024, TimeSpan? maxElapsed = null,
-        int minDimension = 128, int maxDimension = 4096, long maxPixels = 16_000_000,
+        int minDimension = 128, int maxDimension = 4096, long maxPixels = 4096L * 4096, // 16_777_216, consistent with the maxDimension default.
         bool includeMappedRegions = false, bool includeImageRegions = false)
     {
         TimeSpan elapsed = maxElapsed ?? TimeSpan.FromSeconds(2);
         if (maxReadBytes is < 65536 or > 2L * 1024 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(maxReadBytes));
+        // The byte-level floors below are the primitive's minimums (33 is the smallest PNG header
+        // the scanner recognizes, 4 is a single BGRA pixel). The user-facing MiB ranges (1 MiB and
+        // 4 MiB) are enforced by AppSettings.Validate(); tests pass values below 1 MiB on purpose.
         if (maxImageBytes is < 33 or > 64 * 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(maxImageBytes));
         if (chunkSize is < 8 or > 1024 * 1024) throw new ArgumentOutOfRangeException(nameof(chunkSize));
         if (maxReadBytes < (long)maxImageBytes + chunkSize + 65536)

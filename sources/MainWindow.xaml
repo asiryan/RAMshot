@@ -107,11 +107,11 @@
       <TextBlock Text="READ LIMIT / BATCH (MiB)" Style="{StaticResource Caption}"/><TextBox Text="{Binding ReadMiB}"/>
       <TextBlock Text="IMAGE FILE LIMIT (MiB)" Style="{StaticResource Caption}"/><TextBox Text="{Binding ImageMiB}"/>
       <TextBlock Text="BATCH TIME (seconds)" Style="{StaticResource Caption}"/><TextBox Text="{Binding BatchSeconds}"/>
-      <TextBlock Text="MAX IMAGES PER BATCH" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxCandidates}"/>
+      <TextBlock Text="MAX CANDIDATES PER BATCH" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxCandidates}"/>
       <TextBlock Text="MAX SIGNATURES PER BATCH" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxSignatures}"/>
       <TextBlock Text="DECODED IMAGES PER BATCH (MiB)" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxDecodedMiB}"/>
       <TextBlock Text="MIN / MAX IMAGE SIZE (px)" Style="{StaticResource Caption}"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions><TextBox Text="{Binding MinDimension}"/><TextBox Grid.Column="2" Text="{Binding MaxDimension}"/></Grid>
-      <TextBlock Text="IMAGES PER RUN" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxImages}"/>
+      <TextBlock Text="NEW IMAGES PER PORTION" Style="{StaticResource Caption}"/><TextBox Text="{Binding MaxImages}"/>
       <TextBlock Text="GALLERY MEMORY (MiB)" Style="{StaticResource Caption}"/><TextBox Text="{Binding GalleryMiB}"/>
       <TextBlock Text="PAUSE BETWEEN BATCHES (ms)" Style="{StaticResource Caption}"/><TextBox Text="{Binding IntervalMs}"/>
       <CheckBox Content="Mapped regions" IsChecked="{Binding IncludeMappedRegions}" Style="{StaticResource SettingsCheck}" controls:Hint.Text="Search images in file-mapped views as well"/>

@@ -17,6 +17,8 @@ The application runs as administrator: Windows shows a UAC prompt on every start
 
 Defaults: up to 512 MiB per batch, up to 16 MiB per encoded image, 2 seconds per batch, image dimensions from 128 to 4096 pixels, 80 new images per portion, up to 200 MiB in the gallery (thumbnails plus original files), and a 1 second pause between batches. `Mapped` and `Image module` regions are not scanned by default; they can be enabled in Settings. The memory limit applies regardless of the portion size. Settings are stored in `%LocalAppData%\RAMshot\settings.json`; if the file is corrupted or contains invalid values, the defaults are used.
 
+A *batch* is one scanner pass (bounded by the read limit, batch time, candidate count, signature count, and decoded-memory limit); a *portion* is the set of `MaxImages` new images gathered before scanning pauses; a *pass* is a full walk over the target's memory.
+
 ## Limitations
 
 RAMshot reads only the readable memory of the selected process. Results may be resources or stale images rather than what is on screen. Images in other processes' memory, on the GPU, in inaccessible memory, in unsupported formats, or split across regions may not be found. Windows may deny access; the application runs with administrator rights (see above) but does not inject into the target process or bypass process protection.
