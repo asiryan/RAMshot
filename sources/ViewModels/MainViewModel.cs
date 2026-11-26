@@ -18,7 +18,7 @@ namespace RAMshot.ViewModels;
 internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly SettingsStore store;
-    private readonly Func<Target, long, CancellationToken, ScanOptions, MemoryImageScanner.ScanResult> scanTarget;
+    private readonly Func<ProcessRef, long, CancellationToken, ScanOptions, MemoryImageScanner.ScanResult> scanTarget;
     private AppSettings settings;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly HashSet<string> hashes = new(StringComparer.Ordinal);
@@ -31,6 +31,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private enum StopReason { None, Manual, Quota, End, Memory, Error }
     private StopReason stopReason;
     private long scanCursor;
+    private int scanIndex;
     private int portionAdded;
     private int portionQuota;
     private Target? selectedTarget;
@@ -107,7 +108,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public MainViewModel(IntPtr initialWindow) : this(initialWindow, new SettingsStore(), ScanTarget) { }
 
-    internal MainViewModel(IntPtr initialWindow, SettingsStore store, Func<Target, long, CancellationToken, ScanOptions, MemoryImageScanner.ScanResult> scanTarget)
+    internal MainViewModel(IntPtr initialWindow, SettingsStore store, Func<ProcessRef, long, CancellationToken, ScanOptions, MemoryImageScanner.ScanResult> scanTarget)
     {
         this.store = store;
         this.scanTarget = scanTarget;
@@ -118,7 +119,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         MinDimension = settings.MinDimension.ToString(); MaxDimension = settings.MaxDimension.ToString(); MaxImages = settings.MaxImages.ToString(); GalleryMiB = settings.GalleryMiB.ToString(); IntervalMs = settings.ScanIntervalMs.ToString(); HotkeyEnabled = settings.HotkeyEnabled;
         ShowTooltips = settings.ShowTooltips; tooltipsEnabled = settings.ShowTooltips;
         IncludeMappedRegions = settings.IncludeMappedRegions; IncludeImageRegions = settings.IncludeImageRegions;
-        RefreshCommand = new RelayCommand(_ => RefreshTargets(SelectedTarget?.Handle ?? IntPtr.Zero));
+        RefreshCommand = new RelayCommand(_ => RefreshTargets(SelectedTarget?.RootPid));
         PauseCommand = new RelayCommand(_ => TogglePause());
         ClearCommand = new RelayCommand(_ => { if (stoppedForLimit) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); } Clear(); if (!paused) Restart(false); });
         CopyCommand = new RelayCommand(_ => CopySelected());
@@ -126,37 +127,36 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         SelectImageCommand = new RelayCommand(SelectImage);
         ApplySettingsCommand = new RelayCommand(_ => ApplySettings());
         ToggleSettingsCommand = new RelayCommand(_ => { SettingsVisibility = SettingsVisibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible; ResetApplyLabel(); });
-        RefreshTargets(initialWindow);
+        uint initial = initialWindow == IntPtr.Zero ? 0u : AppCatalog.ResolveWindowPid(initialWindow);
+        RefreshTargets(initial == 0 ? null : initial);
     }
 
     public void SelectWindow(IntPtr hwnd)
     {
         if (hwnd == IntPtr.Zero) return;
-        // Refresh the list whenever the window is shown again, but keep the current selection by PID;
-        // when nothing is selected, fall back to the supplied (foreground) window as before.
-        RefreshTargets(SelectedTarget?.Handle ?? hwnd);
+        uint pid = AppCatalog.ResolveWindowPid(hwnd);
+        // Refresh the list whenever the window is shown again, but keep the current selection;
+        // when nothing maps to a selectable app, fall back to the supplied (foreground) window's pid.
+        RefreshTargets(pid == 0 ? SelectedTarget?.RootPid : pid);
     }
-    private void RefreshTargets(IntPtr preferred)
+    private void RefreshTargets(uint? preferredPid)
     {
         Target? previous = SelectedTarget;
-        GetWindowThreadProcessId(preferred, out uint wanted);
-        if (wanted == 0 && previous is not null) wanted = previous.Pid;
-        var targets = new List<Target>(); var seen = new HashSet<uint>();
-        EnumWindows((hwnd, _) =>
-        {
-            if (!IsWindowVisible(hwnd) || GetWindowThreadProcessId(hwnd, out uint pid) == 0 || pid == Environment.ProcessId || !seen.Add(pid)) return true;
-            try { using var process = Process.GetProcessById((int)pid); targets.Add(new Target(hwnd, pid, process.ProcessName, process.StartTime.ToUniversalTime().Ticks)); }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception or NotSupportedException) { }
-            return true;
-        }, IntPtr.Zero);
-        targets.Sort((a,b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name,b.Name));
+        var targets = AppCatalog.Enumerate(includeBackground: true);
         refreshing = true;
         Targets.Clear(); foreach (var target in targets) Targets.Add(target);
-        SelectedTarget = Targets.FirstOrDefault(target => target.Pid == wanted);
+        SelectedTarget = preferredPid is uint wanted
+            ? Targets.FirstOrDefault(target => target.RootPid == wanted || target.Processes.Any(process => process.Pid == wanted))
+            : previous is null ? null : Targets.FirstOrDefault(target => target.RootPid == previous.RootPid);
         refreshing = false;
-        bool same = previous is not null && SelectedTarget is not null && previous.Pid == SelectedTarget.Pid && previous.StartTicks == SelectedTarget.StartTicks;
-        if (!same) { paused = false; stoppedForLimit = false; Changed(nameof(PauseLabel)); Restart(true); }
-        else if (previous!.Handle != SelectedTarget!.Handle && !paused) Restart(false);
+        bool same = previous is not null && SelectedTarget is not null && previous.RootPid == SelectedTarget.RootPid;
+        if (!same)
+        {
+            paused = false; stoppedForLimit = false;
+            Changed(nameof(PauseLabel));
+            Restart(true);
+        }
+        // Same app: the refreshed list is shown, but an in-flight scan keeps its progress.
     }
     private void SelectImage(object? value)
     {
@@ -328,12 +328,18 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             portionAdded = 0; portionQuota = settings.MaxImages;
             Changed(nameof(ImageCountLabel));
+            if (stopReason == StopReason.End && SelectedTarget is not null)
+            {
+                // Re-resolve the group so newly spawned children (e.g. a new browser tab) are scanned.
+                AppCatalog.RefreshChildren(SelectedTarget);
+                scanIndex = 0; scanCursor = 0;
+            }
         }
         paused = false; stoppedForLimit = false; stopReason = StopReason.None;
         Changed(nameof(PauseLabel)); Restart(false);
     }
     private void Cancel() { generation++; cancellation?.Cancel(); cancellation = null; }
-    private void Clear() { StopAnimation(); Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; SetSelectedImage(null); SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; SelectedPreview = null; SelectedFormatLabel = ""; previewIsFull = false; Changed(nameof(SelectedRegionLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
+    private void Clear() { StopAnimation(); Images.Clear(); hashes.Clear(); bytes = 0; requiredMemoryBytes = 0; scanCursor = 0; scanIndex = 0; portionAdded = 0; portionQuota = settings.MaxImages; stopReason = StopReason.None; SetSelectedImage(null); SelectedLabel = "No image selected"; CopyLabel = "Copy"; SaveLabel = "Save"; SelectedPreview = null; SelectedFormatLabel = ""; previewIsFull = false; Changed(nameof(SelectedRegionLabel)); Changed(nameof(ImageCountLabel)); Changed(nameof(ShowEmptyHint)); }
     private void Restart(bool clear)
     {
         Cancel();
@@ -350,6 +356,14 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             while (!token.IsCancellationRequested && !disposed && version == generation)
             {
+                // Every process in the group has been scanned; stop until the user resumes.
+                if (scanIndex >= target.Processes.Count)
+                {
+                    paused = true; stoppedForLimit = false; stopReason = StopReason.End;
+                    Changed(nameof(PauseLabel)); Status = "Scan complete. Press Resume to search again";
+                    return;
+                }
+                ProcessRef current = target.Processes[scanIndex];
                 Status = $"Scanning {target.Name} · {Images.Count} images";
                 if (!await WaitForGateAsync(token)) return;
                 AppSettings active;
@@ -372,7 +386,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     batch = await Task.Run<ScanBatch?>(() =>
                     {
                         if (token.IsCancellationRequested) return null;
-                        using var scan = scanTarget(target, batchStart, token, scanOptions);
+                        using var scan = scanTarget(current, batchStart, token, scanOptions);
                         var converted = new List<ConvertedImage>();
                         bool limitReached = false;
                         long requiredBytes = 0;
@@ -400,6 +414,12 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                         return new ScanBatch(converted, scan.BytesRead, scan.NextAddress, scan.IsEnd, limitReached, requiredBytes);
                     });
                 }
+                catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or ArgumentException)
+                {
+                    // This process exited or became unreadable mid-scan; skip it and continue with the next.
+                    scanIndex++; scanCursor = 0;
+                    continue;
+                }
                 finally { gate.Release(); }
                 if (batch is null || disposed || token.IsCancellationRequested || version != generation) return;
                 foreach (var candidate in batch.Images)
@@ -411,10 +431,9 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 if (batch.LimitReached)
                 { scanCursor = batchStart; requiredMemoryBytes = batch.RequiredBytes; paused = stoppedForLimit = true; stopReason = StopReason.Memory; Changed(nameof(PauseLabel)); Status = "Gallery memory limit reached. Increase the limit or clear images"; return; }
                 scanCursor = batch.IsEnd ? 0 : batch.NextAddress;
+                if (batch.IsEnd) scanIndex++;
                 if (portionAdded >= portionQuota)
                 { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next portion"; return; }
-                if (batch.IsEnd)
-                { paused = true; stoppedForLimit = false; stopReason = StopReason.End; Changed(nameof(PauseLabel)); Status = "Scan complete. Press Resume to search again"; return; }
                 Status = $"{target.Name} · {Images.Count} images · {batch.BytesRead / 1048576} MiB scanned";
                 await WaitForDelayAsync(active.ScanIntervalMs, token);
             }
@@ -443,12 +462,11 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         await delay.ContinueWith(task => { if (!task.IsCanceled) task.GetAwaiter().GetResult(); }, CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
-    private static MemoryImageScanner.ScanResult ScanTarget(Target target, long cursor, CancellationToken token, ScanOptions options)
+    private static MemoryImageScanner.ScanResult ScanTarget(ProcessRef target, long cursor, CancellationToken token, ScanOptions options)
     {
-        if (GetWindowThreadProcessId(target.Handle, out uint pid) == 0 || pid != target.Pid) throw new InvalidOperationException("Target process changed.");
         using var process = Process.GetProcessById((int)target.Pid);
-        if (process.StartTime.ToUniversalTime().Ticks != target.StartTicks) throw new InvalidOperationException("Target process changed.");
-        return MemoryImageScanner.Scan(target.Handle, cursor, token, target.Pid, options);
+        if (target.StartTicks != 0 && process.StartTime.ToUniversalTime().Ticks != target.StartTicks) throw new InvalidOperationException("Target process changed.");
+        return MemoryImageScanner.Scan(target.Pid, cursor, token, options);
     }
     private async void CopySelected()
     {
@@ -619,11 +637,6 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose() { disposed = true; Cancel(); Clear(); }
     private sealed record ConvertedImage(BitmapSource Thumbnail, string Hash, int Width, int Height, long Bytes, string RegionKind, string Format, byte[] EncodedBytes);
     private sealed record ScanBatch(List<ConvertedImage> Images, long BytesRead, long NextAddress, bool IsEnd, bool LimitReached, long RequiredBytes);
-    public sealed record Target(IntPtr Handle, uint Pid, string Name, long StartTicks)
-    {
-        public string Label => $"{Name}  ·  {Pid}";
-        public override string ToString() => Label;
-    }
     public sealed class ImageEntry : INotifyPropertyChanged
     {
         private bool isSelected;
@@ -647,8 +660,4 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         public event PropertyChangedEventHandler? PropertyChanged;
     }
     private sealed class RelayCommand(Action<object?> action) : ICommand { public event EventHandler? CanExecuteChanged { add { } remove { } } public bool CanExecute(object? p) => true; public void Execute(object? p) => action(p); }
-    private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr data);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr data);
-    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(IntPtr hwnd);
-    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
 }

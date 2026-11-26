@@ -44,14 +44,22 @@ internal static class MemoryImageScanner
 
     internal static ScanResult Scan(IntPtr window, long startAddress = 0, CancellationToken cancellationToken = default, uint expectedProcessId = 0, ScanOptions? options = null)
     {
-        options ??= ScanOptions.Default;
-        uint excludedRegionTypes = (options.IncludeMappedRegions ? 0u : MemMapped) | (options.IncludeImageRegions ? 0u : MemImage);
-        if (startAddress < 0) throw new ArgumentOutOfRangeException(nameof(startAddress));
-        if (!Environment.Is64BitProcess) throw new PlatformNotSupportedException("Memory scan requires a 64-bit process.");
         if (window == IntPtr.Zero || GetWindowThreadProcessId(window, out uint pid) == 0 || pid == 0)
             throw new InvalidOperationException("The target window is unavailable.");
         if (expectedProcessId != 0 && pid != expectedProcessId)
             throw new InvalidOperationException("The target window now belongs to a different process.");
+        return Scan(pid, startAddress, cancellationToken, options);
+    }
+
+    // Scans a single process by id, resuming from startAddress. The caller drives
+    // the group iteration, passing each descendant's pid in turn.
+    internal static ScanResult Scan(uint pid, long startAddress = 0, CancellationToken cancellationToken = default, ScanOptions? options = null)
+    {
+        options ??= ScanOptions.Default;
+        uint excludedRegionTypes = (options.IncludeMappedRegions ? 0u : MemMapped) | (options.IncludeImageRegions ? 0u : MemImage);
+        if (startAddress < 0) throw new ArgumentOutOfRangeException(nameof(startAddress));
+        if (!Environment.Is64BitProcess) throw new PlatformNotSupportedException("Memory scan requires a 64-bit process.");
+        if (pid == 0) throw new InvalidOperationException("The target process is unavailable.");
         IntPtr process = OpenProcess(0x0410, false, pid); // PROCESS_QUERY_INFORMATION | PROCESS_VM_READ
         if (process == IntPtr.Zero) throw new Win32Exception(Marshal.GetLastWin32Error(), "Unable to read target process memory.");
         var result = new ScanResult();
