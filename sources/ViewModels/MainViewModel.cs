@@ -79,7 +79,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public string Status { get => status; private set { status = value; Changed(); } }
     public string SettingsStatus { get => settingsStatus; private set { settingsStatus = value; Changed(); } }
     public string SelectedLabel { get => selectedLabel; private set { selectedLabel = value; Changed(); } }
-    public string ImageCountLabel => $"{Images.Count} images";
+    public string ImageCountLabel => Images.Count.Declension("image", "images");
     public string PauseLabel => paused ? "Resume" : "Pause";
     public string CopyLabel { get => copyLabel; private set { copyLabel = value; Changed(); } }
     public string SaveLabel { get => saveLabel; private set { saveLabel = value; Changed(); } }
@@ -364,7 +364,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     return;
                 }
                 ProcessRef current = target.Processes[scanIndex];
-                Status = $"Scanning {target.Name} · {Images.Count} images";
+                Status = $"Scanning {target.Name} · {Images.Count.Declension("image", "images")}";
                 if (!await WaitForGateAsync(token)) return;
                 AppSettings active;
                 long batchStart;
@@ -433,8 +433,8 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 scanCursor = batch.IsEnd ? 0 : batch.NextAddress;
                 if (batch.IsEnd) scanIndex++;
                 if (portionAdded >= portionQuota)
-                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded} images. Press Resume for the next portion"; return; }
-                Status = $"{target.Name} · {Images.Count} images · {batch.BytesRead / 1048576} MiB scanned";
+                { paused = stoppedForLimit = true; stopReason = StopReason.Quota; Changed(nameof(PauseLabel)); Status = $"Found {portionAdded.Declension("image", "images")}. Press Resume for the next portion"; return; }
+                Status = $"{target.Name} · {Images.Count.Declension("image", "images")} · {batch.BytesRead / 1048576} MiB scanned";
                 await WaitForDelayAsync(active.ScanIntervalMs, token);
             }
         }
@@ -516,7 +516,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex) { Status = $"Unable to choose a folder (error 0x{ex.HResult:X8})"; return; }
         if (string.IsNullOrWhiteSpace(folder)) return;
-        Status = $"Saving {selection.Count} images...";
+        Status = $"Saving {selection.Count.Declension("image", "images")}...";
         int saved, failed;
         try
         {
@@ -524,7 +524,7 @@ internal sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
         catch (Exception ex) { Status = $"Unable to save images (error 0x{ex.HResult:X8})"; return; }
         SaveLabel = failed == 0 ? "Saved" : "Save";
-        Status = failed == 0 ? $"Saved {saved} images to {folder}" : $"Saved {saved} images, {failed} failed";
+        Status = failed == 0 ? $"Saved {saved.Declension("image", "images")} to {folder}" : $"Saved {saved.Declension("image", "images")}, {failed} failed";
     }
     private static (int Saved, int Failed) SaveImagesToFolder(IReadOnlyList<ImageEntry> images, string folder)
     {

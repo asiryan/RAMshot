@@ -21,7 +21,7 @@ public sealed class Target
     public BitmapSource? Icon { get; init; }
     public List<ProcessRef> Processes { get; } = new();
 
-    public string Label => $"{Name}  ·  {RootPid}  ·  {Processes.Count} {(Processes.Count == 1 ? "process" : "processes")}";
+    public string Label => $"{Name}  ·  {RootPid}  ·  {Processes.Count.Declension("process", "processes")}";
 
     public override string ToString() => Label;
 }
